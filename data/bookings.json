@@ -1,0 +1,34 @@
+[
+    {
+        "booking_id": "MM-4F4CB3DA",
+        "ground_id": 1,
+        "ground_name": "All Sports Ground",
+        "location": "Al Quoz, Dubai",
+        "customer_name": "Tariq Al Mansoori",
+        "customer_phone": "0527132921",
+        "booking_date": "2026-08-01",
+        "time_slot": "05:00 PM - 06:00 PM",
+        "original_price": 250,
+        "discount_applied": 50,
+        "total_paid": 200,
+        "payment_method": "Credit Card",
+        "status": "Confirmed",
+        "created_at": "2026-07-27 15:36:21"
+    },
+    {
+        "booking_id": "MM-1BB43668",
+        "ground_id": 1,
+        "ground_name": "MeroMaidan Central Futsal & Sports Ground",
+        "location": "Thamel, Kathmandu",
+        "customer_name": "Aarav Sharma",
+        "customer_phone": "9841987654",
+        "booking_date": "2026-08-01",
+        "time_slot": "05:00 PM - 06:00 PM",
+        "original_price": 1500,
+        "discount_applied": 300,
+        "total_paid": 1200,
+        "payment_method": "Khalti",
+        "status": "Confirmed",
+        "created_at": "2026-07-27 15:26:50"
+    }
+]

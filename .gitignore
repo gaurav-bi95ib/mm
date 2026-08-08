@@ -1,0 +1,16 @@
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Large media files (not needed in repo)
+website design in.png
+
+# XAMPP / Environment
+.env
+
+# Gemini agent artifacts
+.agents/
