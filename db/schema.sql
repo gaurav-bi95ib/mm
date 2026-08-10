@@ -5,13 +5,16 @@ CREATE DATABASE IF NOT EXISTS meromaidan CHARACTER SET utf8mb4 COLLATE utf8mb4_u
 USE meromaidan;
 
 -- ─────────────────────────────────────────────
--- Subscription Plans
+-- Single annual venue subscription
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS subscription_plans (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   slug VARCHAR(50) NOT NULL UNIQUE,
   price_monthly DECIMAL(10,2) NOT NULL DEFAULT 0,
+  price_yearly DECIMAL(10,2) NOT NULL DEFAULT 9999,
+  duration_months INT NOT NULL DEFAULT 12,
+  included_venues INT NOT NULL DEFAULT 1,
   max_venues INT NOT NULL DEFAULT 1,
   max_bookings_per_month INT NOT NULL DEFAULT 50,
   features JSON,
@@ -59,9 +62,6 @@ CREATE TABLE IF NOT EXISTS venues (
   price_per_hour DECIMAL(10,2) NOT NULL DEFAULT 1000,
   capacity VARCHAR(50) DEFAULT '5-a-side',
   status ENUM('pending','active','suspended') DEFAULT 'pending',
-  featured TINYINT(1) DEFAULT 0,
-  rating DECIMAL(3,2) DEFAULT 0.00,
-  total_reviews INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_id) REFERENCES venue_owners(id) ON DELETE SET NULL
 );
@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS venue_slots (
   day_of_week TINYINT(1) NOT NULL COMMENT '0=Sun,1=Mon,...,6=Sat',
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
+  base_price DECIMAL(10,2) NULL,
+  coupon_id BIGINT NULL,
+  coupon_code VARCHAR(50) NULL,
+  discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  fees_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  tax_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
   price DECIMAL(10,2) NOT NULL,
   is_available TINYINT(1) DEFAULT 1,
   FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE

@@ -87,7 +87,6 @@ $favorites = $stmt->fetchAll();
                 <div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                     <span style="font-size:11px;font-weight:800;background:#e6f7ec;color:#16a34a;padding:2px 8px;border-radius:50px;"><?= htmlspecialchars($v['sport_type']) ?></span>
-                    <span style="font-size:12px;font-weight:700;color:#f59e0b;">⭐ <?= $v['rating'] ?></span>
                   </div>
                   <h3 style="font-size:16px;font-weight:800;color:#0f2740;"><?= htmlspecialchars($v['name']) ?></h3>
                   <p style="font-size:12px;color:#64748b;margin:4px 0 12px;">📍 <?= htmlspecialchars($v['address']) ?></p>
@@ -120,7 +119,7 @@ function removeFavorite(venueId) {
   fetch('../api/favorites.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ venue_id: venueId, action: 'remove' })
+    body: JSON.stringify({ venue_id: venueId, action: 'remove', csrf_token: '<?=csrfToken()?>' })
   })
   .then(res => res.json())
   .then(data => {

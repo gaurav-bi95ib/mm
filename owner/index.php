@@ -33,6 +33,13 @@ if (!empty($venueIds)) {
 $owner = $db->prepare("SELECT vo.*, sp.name as plan_name, sp.max_venues FROM venue_owners vo LEFT JOIN subscription_plans sp ON vo.plan_id=sp.id WHERE vo.id=:id");
 $owner->execute([':id' => $ownerId]);
 $ownerData = $owner->fetch();
+$recommendedCountStmt = $db->prepare("SELECT COUNT(*) FROM recommended_venue_promotions WHERE owner_id=? AND status IN ('pending_payment','pending_review','scheduled','active')");
+$recommendedCountStmt->execute([$ownerId]);
+$recommendedCount = (int)$recommendedCountStmt->fetchColumn();
+$eventCountStmt = $db->prepare("SELECT COUNT(*) FROM event_promotions WHERE owner_id=? AND status IN ('draft','pending_payment','pending_review','scheduled','active')");
+$eventCountStmt->execute([$ownerId]);
+$eventCount = (int)$eventCountStmt->fetchColumn();
+$eventPrice = EVENT_PROMOTION_PRICE_NPR;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,6 +47,9 @@ $ownerData = $owner->fetch();
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>My Dashboard – MeroMaidan</title>
   <link rel="stylesheet" href="../assets/css/admin.css">
+  <style>
+    .promotion-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}.promotion-shortcut{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;padding:22px;border:1px solid #dfe8ee;border-radius:18px;text-decoration:none;background:#fff;box-shadow:0 8px 24px rgba(15,39,64,.045);transition:.2s}.promotion-shortcut:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(15,39,64,.1)}.promotion-shortcut.recommended{background:linear-gradient(135deg,#effcf4,#fff)}.promotion-shortcut.event{background:linear-gradient(135deg,#fff3ea,#fff)}.promotion-shortcut small{display:block;font-size:9px;font-weight:900;letter-spacing:.11em;color:#5f7689}.promotion-shortcut h3{margin:5px 0;color:#0f2740;font-size:18px}.promotion-shortcut p{margin:0;color:#64748b;font-size:11px;line-height:1.55}.promotion-shortcut .price{font-size:17px;font-weight:900;color:#0f2740;text-align:right}.promotion-shortcut .price span{display:block;margin-top:5px;color:#16a34a;font-size:10px}@media(max-width:800px){.promotion-shortcuts{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
 <div class="admin-layout">
@@ -54,6 +64,7 @@ $ownerData = $owner->fetch();
       <a href="venue.php" class="nav-link"><span class="icon">🏟️</span> My Venue</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="slots.php" class="nav-link"><span class="icon">⏰</span> Manage Slots</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
       <a href="../list-ground.php" class="nav-link"><span class="icon">➕</span> Add Venue</a>
@@ -64,7 +75,7 @@ $ownerData = $owner->fetch();
         <div class="admin-user-info">
           <div class="admin-user-name"><?=htmlspecialchars($ownerName)?></div>
           <div class="admin-user-role">
-            <span class="badge <?=strtolower($ownerData['plan_name']??'free')?>" style="font-size:9px;padding:2px 8px;"><?=$ownerData['plan_name']??'Free'?> Plan</span>
+            <span class="badge active" style="font-size:9px;padding:2px 8px;"><?=htmlspecialchars($ownerData['plan_name']??'Annual Venue Subscription')?></span>
           </div>
         </div>
       </div>
@@ -106,6 +117,11 @@ $ownerData = $owner->fetch();
         </div>
       </div>
 
+      <div class="promotion-shortcuts">
+        <a class="promotion-shortcut recommended" href="recommended-promotion.php"><div><small>PAID LOCATION VISIBILITY</small><h3>Recommended Venue</h3><p>Pay for one month, then Super Admin sets and activates the exact venue placement.</p></div><div class="price">NPR 1,000<span><?=$recommendedCount?> current order<?=$recommendedCount===1?'':'s'?> →</span></div></a>
+        <a class="promotion-shortcut event" href="event-promotion.php"><div><small>ONE-WEEK HERO CAMPAIGN</small><h3>Event Promotion</h3><p>Submit a 1600×600 venue banner and optional booking coupon for Super Admin review.</p></div><div class="price">NPR <?=number_format($eventPrice)?> / week<span><?=$eventCount?> current campaign<?=$eventCount===1?'':'s'?> →</span></div></a>
+      </div>
+
       <!-- My Venues -->
       <?php if(!empty($myVenues)): ?>
       <div class="data-card" style="margin-bottom:20px;">
@@ -120,7 +136,7 @@ $ownerData = $owner->fetch();
           <tr>
             <td>
               <div class="venue-name-cell"><?=htmlspecialchars($v['name'])?></div>
-              <div class="venue-location">⭐ <?=$v['rating']?> · <?=$v['total_reviews']?> reviews</div>
+              <div class="venue-location"><?=htmlspecialchars($v['capacity'])?></div>
             </td>
             <td><span class="badge pending"><?=$v['sport_type']?></span></td>
             <td><?=htmlspecialchars($v['city'])?></td>

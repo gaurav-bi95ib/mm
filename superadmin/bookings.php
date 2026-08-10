@@ -3,6 +3,20 @@ require_once __DIR__ . '/../api/db.php';
 requireSuperAdmin();
 $db = getDB();
 
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['action'],$_POST['id'])){
+    if(!verifyCsrfToken($_POST['csrf_token']??'')){http_response_code(403);die('Your session expired. Please return and try again.');}
+    $id=(int)$_POST['id'];
+    $action=$_POST['action'];
+    if($action==='confirm'){
+        $db->prepare("UPDATE bookings SET status='confirmed' WHERE id=:id AND status='pending'")->execute([':id'=>$id]);
+    }elseif($action==='cancel'){
+        $db->prepare("UPDATE bookings SET status='cancelled' WHERE id=:id AND status='confirmed'")->execute([':id'=>$id]);
+    }else{http_response_code(400);die('Unsupported booking action.');}
+    logAudit('manage_booking','Booking','booking',$id,$action.' booking');
+    $redirectFilters=array_filter(['status'=>$_POST['status_filter']??'all','date'=>$_POST['date_filter']??''],fn($value)=>$value!==''&&$value!=='all');
+    header('Location: bookings.php'.($redirectFilters?'?'.http_build_query($redirectFilters):''));exit;
+}
+
 $statusFilter = $_GET['status'] ?? 'all';
 $dateFilter   = $_GET['date']   ?? '';
 
@@ -41,7 +55,10 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
       <a href="owners.php" class="nav-link"><span class="icon">👤</span> Owners</a>
       <a href="bookings.php" class="nav-link active"><span class="icon">📅</span> Bookings</a>
       <a href="applications.php" class="nav-link"><span class="icon">📋</span> Applications <?php if($appsCount>0): ?><span class="badge orange"><?=$appsCount?></span><?php endif;?></a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
       <div class="nav-section-label">System</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -120,9 +137,9 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
               <td><span class="badge <?=$b['status']?>"><?=ucfirst($b['status'])?></span></td>
               <td>
                 <?php if($b['status']==='pending'): ?>
-                <a href="?action=confirm&id=<?=$b['id']?>&<?=http_build_query(['status'=>$statusFilter,'date'=>$dateFilter])?>" class="btn btn-green btn-sm">✓ Confirm</a>
+                <form method="post"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$b['id']?>"><input type="hidden" name="status_filter" value="<?=htmlspecialchars($statusFilter)?>"><input type="hidden" name="date_filter" value="<?=htmlspecialchars($dateFilter)?>"><button name="action" value="confirm" class="btn btn-green btn-sm">✓ Confirm</button></form>
                 <?php elseif($b['status']==='confirmed'): ?>
-                <a href="?action=cancel&id=<?=$b['id']?>&<?=http_build_query(['status'=>$statusFilter,'date'=>$dateFilter])?>" class="btn btn-red btn-sm" onclick="return confirm('Cancel this booking?')">✕ Cancel</a>
+                <form method="post" onsubmit="return confirm('Cancel this booking?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$b['id']?>"><input type="hidden" name="status_filter" value="<?=htmlspecialchars($statusFilter)?>"><input type="hidden" name="date_filter" value="<?=htmlspecialchars($dateFilter)?>"><button name="action" value="cancel" class="btn btn-red btn-sm">✕ Cancel</button></form>
                 <?php else: ?>
                 <span style="font-size:11px;color:#94a3b8;">—</span>
                 <?php endif;?>
@@ -139,13 +156,5 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
     </div>
   </main>
 </div>
-<?php
-// Handle actions
-if(isset($_GET['action'],$_GET['id'])){
-    $id=$_GET['id'];
-    if($_GET['action']==='confirm') $db->prepare("UPDATE bookings SET status='confirmed' WHERE id=:id")->execute([':id'=>$id]);
-    if($_GET['action']==='cancel')  $db->prepare("UPDATE bookings SET status='cancelled' WHERE id=:id")->execute([':id'=>$id]);
-}
-?>
 </body>
 </html>

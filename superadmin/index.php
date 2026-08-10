@@ -62,7 +62,10 @@ $adminName = $_SESSION['superadmin_name'] ?? 'Admin';
         <span class="icon">📋</span> Applications
         <?php if($stats['apps']>0): ?><span class="badge orange"><?= $stats['apps'] ?></span><?php endif; ?>
       </a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
 
       <div class="nav-section-label">System</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
@@ -166,8 +169,8 @@ $adminName = $_SESSION['superadmin_name'] ?? 'Admin';
             <div style="font-size:12px;color:#64748b;margin:2px 0;"><?= htmlspecialchars($v['city']) ?> · <?= htmlspecialchars($v['sport_type']) ?></div>
             <div style="font-size:11px;color:#64748b;">Owner: <?= htmlspecialchars($v['owner_name']) ?></div>
             <div style="display:flex;gap:8px;margin-top:8px;">
-              <a href="venues.php?action=approve&id=<?= $v['id'] ?>" class="btn btn-green btn-sm">✓ Approve</a>
-              <a href="venues.php?action=reject&id=<?= $v['id'] ?>" class="btn btn-red btn-sm">✕ Reject</a>
+              <form method="post" action="venues.php" style="display:inline"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="approve" class="btn btn-green btn-sm">✓ Approve</button></form>
+              <form method="post" action="venues.php" style="display:inline" onsubmit="return confirm('Reject this venue?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="reject" class="btn btn-red btn-sm">✕ Reject</button></form>
             </div>
           </div>
           <?php endforeach; ?>

@@ -1,169 +1,31 @@
 <?php
-// MeroMaidan - Owner Subscription & Billing Workspace
 require_once __DIR__ . '/../api/db.php';
 requireOwner();
-
 $db = getDB();
-$ownerId   = $_SESSION['owner_id'];
+$ownerId = (int)$_SESSION['owner_id'];
 $ownerName = $_SESSION['owner_name'] ?? 'Owner';
 
-// Fetch owner info & current plan
-$stmt = $db->prepare("SELECT vo.*, sp.name as plan_name, sp.price_monthly, sp.max_venues, sp.max_bookings_per_month 
-                      FROM venue_owners vo 
-                      LEFT JOIN subscription_plans sp ON vo.plan_id = sp.id 
-                      WHERE vo.id = ?");
+$stmt = $db->prepare("SELECT vo.*,sp.id plan_id,sp.name plan_name,sp.price_yearly,sp.duration_months,sp.included_venues,sp.features
+    FROM venue_owners vo JOIN subscription_plans sp ON vo.plan_id=sp.id WHERE vo.id=?");
 $stmt->execute([$ownerId]);
 $owner = $stmt->fetch();
-
-// Fetch resource usage
-$vCountStmt = $db->prepare("SELECT COUNT(*) FROM venues WHERE owner_id = ?");
-$vCountStmt->execute([$ownerId]);
-$venuesCount = $vCountStmt->fetchColumn();
-
-$sCountStmt = $db->prepare("SELECT COUNT(*) FROM tenant_staff WHERE owner_id = ?");
-$sCountStmt->execute([$ownerId]);
-$staffCount = $sCountStmt->fetchColumn();
-
-// Fetch all available subscription plans
-$pStmt = $db->query("SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY price_monthly ASC");
-$plans = $pStmt->fetchAll();
-
-$msg = $_GET['msg'] ?? '';
+$subStmt = $db->prepare("SELECT vs.*,v.name venue_name FROM venue_subscriptions vs LEFT JOIN venues v ON v.id=vs.venue_id WHERE vs.owner_id=? ORDER BY vs.created_at DESC LIMIT 1");
+$subStmt->execute([$ownerId]);
+$subscription = $subStmt->fetch();
+$venueStmt = $db->prepare("SELECT id,name,status FROM venues WHERE owner_id=? ORDER BY created_at");
+$venueStmt->execute([$ownerId]);
+$venues = $venueStmt->fetchAll();
+$paymentStmt = $db->prepare("SELECT * FROM promotion_payments WHERE owner_id=? AND service_type='annual_subscription' ORDER BY created_at DESC LIMIT 10");
+$paymentStmt->execute([$ownerId]);
+$payments = $paymentStmt->fetchAll();
+$features = json_decode($owner['features'] ?? '[]', true) ?: [];
+$daysLeft = $subscription ? max(0,(int)ceil((strtotime($subscription['expires_at'])-time())/86400)) : 0;
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subscription & Billing - MeroMaidan Owner</title>
-  <link rel="stylesheet" href="../assets/css/admin.css">
-  <style>
-    .plans-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 24px; }
-    .plan-card { background: white; border-radius: 12px; border: 2px solid #e2e8f0; padding: 24px; position: relative; display: flex; flex-direction: column; }
-    .plan-card.current { border-color: #10b981; background: #f0fdf4; }
-    .plan-card.featured { border-color: #f97316; }
-    .plan-title { font-size: 20px; font-weight: 800; color: #0f172a; }
-    .plan-price { font-size: 28px; font-weight: 900; color: #10b981; margin: 12px 0; }
-    .plan-price sub { font-size: 13px; color: #64748b; font-weight: 500; }
-    .plan-features { list-style: none; margin: 16px 0; font-size: 13px; color: #475569; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-    .progress-bar { background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
-    .progress-fill { background: #10b981; height: 100%; border-radius: 4px; }
-  </style>
-</head>
-<body>
-<div class="admin-layout">
-  <aside class="admin-sidebar">
-    <div class="sidebar-logo">
-      <div>
-        <div class="sidebar-logo-text">Mero<span>Maidan</span></div>
-        <div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;">Venue Owner Panel</div>
-      </div>
-    </div>
-    <nav class="sidebar-nav">
-      <div class="nav-section-label">My Dashboard</div>
-      <a href="index.php" class="nav-link"><span class="icon">📊</span> Overview</a>
-      <a href="venue.php" class="nav-link"><span class="icon">🏟️</span> My Venue</a>
-      <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
-      <a href="slots.php" class="nav-link"><span class="icon">⏰</span> Manage Slots</a>
-      <a href="field_ops.php" class="nav-link"><span class="icon">📋</span> Field Operations</a>
-      <a href="staff.php" class="nav-link"><span class="icon">👥</span> Staff & Roles</a>
-      <a href="subscription.php" class="nav-link active"><span class="icon">⭐</span> Subscription</a>
-      <a href="notifications.php" class="nav-link"><span class="icon">🔔</span> Notifications</a>
-      <div class="nav-section-label">Account</div>
-      <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="admin-user-row">
-        <div class="admin-avatar"><?=strtoupper(substr($ownerName,0,2))?></div>
-        <div class="admin-user-info">
-          <div class="admin-user-name"><?=htmlspecialchars($ownerName)?></div>
-          <div class="admin-user-role">Venue Owner</div>
-        </div>
-      </div>
-      <a href="../auth/logout.php" class="btn-logout">🚪 Sign Out</a>
-    </div>
-  </aside>
-
-  <main class="admin-main">
-    <div class="admin-topbar">
-      <div class="topbar-title">⭐ Subscription & <span>SaaS Billing</span></div>
-    </div>
-
-    <div class="admin-content">
-      <div class="page-header">
-        <h1>SaaS Subscription Workspace</h1>
-        <p>Monitor plan resource limits and upgrade using eSewa.</p>
-      </div>
-
-      <?php if ($msg === 'upgraded'): ?>
-        <div style="background:#dcfce7;border:1px solid #86efac;padding:14px;border-radius:8px;color:#166534;margin-bottom:20px;font-weight:700;">
-          🎉 Subscription upgraded successfully via eSewa!
-        </div>
-      <?php endif; ?>
-
-      <!-- Current Usage Card -->
-      <div class="data-card" style="padding:24px;margin-bottom:32px;">
-        <h3>📊 Active Plan Usage: <span style="color:#10b981;"><?= htmlspecialchars($owner['plan_name'] ?? 'Free') ?> Plan</span></h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px;">
-          <div>
-            <div style="display:flex;justify-space-between;font-size:13px;font-weight:600;">
-              <span>Venues Allowed</span>
-              <span><?= $venuesCount ?> / <?= $owner['max_venues'] ?? 1 ?> Venues</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: <?= min(100, ($venuesCount / ($owner['max_venues'] ?: 1)) * 100) ?>%;"></div>
-            </div>
-          </div>
-
-          <div>
-            <div style="display:flex;justify-space-between;font-size:13px;font-weight:600;">
-              <span>Staff Accounts Allowed</span>
-              <span><?= $staffCount ?> Accounts</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: <?= min(100, ($staffCount / 5) * 100) ?>%;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Subscription Plans Comparison -->
-      <h2>Available SaaS Subscription Plans</h2>
-      <div class="plans-grid">
-        <?php foreach ($plans as $p): ?>
-          <?php $isCurrent = ($owner['plan_id'] == $p['id']); ?>
-          <div class="plan-card <?= $isCurrent ? 'current' : '' ?>">
-            <?php if ($isCurrent): ?>
-              <span class="badge active" style="position:absolute;top:16px;right:16px;">Active Plan</span>
-            <?php endif; ?>
-            <div class="plan-title"><?= htmlspecialchars($p['name']) ?></div>
-            <div class="plan-price">NPR <?= number_format($p['price_monthly']) ?><sub>/month</sub></div>
-            <ul class="plan-features">
-              <li>✔️ Max Venues: <strong><?= $p['max_venues'] ?></strong></li>
-              <li>✔️ Max Bookings/Month: <strong><?= $p['max_bookings_per_month'] ?></strong></li>
-              <?php 
-                $feats = json_decode($p['features'] ?? '[]', true);
-                if (is_array($feats)) {
-                    foreach ($feats as $f) {
-                        echo "<li>✔️ " . htmlspecialchars($f) . "</li>";
-                    }
-                }
-              ?>
-            </ul>
-
-            <?php if ($isCurrent): ?>
-              <button class="btn btn-ghost" disabled style="width:100%;margin-top:auto;">Current Plan</button>
-            <?php else: ?>
-              <a href="../esewa/payment.php?subscription_upgrade=1&plan_id=<?= $p['id'] ?>" class="btn btn-green" style="width:100%;margin-top:auto;text-align:center;text-decoration:none;">
-                ⚡ Upgrade with eSewa
-              </a>
-            <?php endif; ?>
-          </div>
-        <?php endforeach; ?>
-      </div>
-
-    </div>
-  </main>
-</div>
-</body>
-</html>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Annual Subscription - MeroMaidan Owner</title><link rel="stylesheet" href="../assets/css/admin.css"><style>
+.subscription-hero{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;padding:30px;border-radius:24px;background:linear-gradient(135deg,#0b2137,#154564);color:#fff;overflow:hidden}.eyebrow{color:#88ecaa;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.subscription-hero h1{font-size:36px;line-height:1.1;margin:10px 0}.subscription-hero p{color:#c4d2de;max-width:650px;line-height:1.7}.price-box{padding:25px;border:1px solid rgba(255,255,255,.15);border-radius:19px;background:rgba(255,255,255,.08)}.price-box strong{display:block;font-size:39px}.price-box span{color:#bad0df}.service-separation{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}.service-card{padding:20px;border:1px solid #e1e8ee;border-radius:17px;background:#fff}.service-card.addon{background:#f8fafc}.service-card h3{font-size:15px;margin-bottom:7px}.service-card p{font-size:12px;color:#64748b;line-height:1.55}.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.status-card{padding:22px;border:1px solid #e1e8ee;border-radius:18px;background:#fff}.status-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #edf1f4;font-size:13px}.feature-list{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:17px}.feature-list span{font-size:12px;color:#395169}.feature-list span:before{content:'✓';color:#1bb955;font-weight:900;margin-right:7px}@media(max-width:850px){.subscription-hero,.status-grid{grid-template-columns:1fr}.service-separation{grid-template-columns:1fr}.feature-list{grid-template-columns:1fr}}
+</style></head><body><div class="admin-layout"><aside class="admin-sidebar"><div class="sidebar-logo"><div class="sidebar-logo-text">Mero<span>Maidan</span></div></div><nav class="sidebar-nav"><div class="nav-section-label">Venue Workspace</div><a href="index.php" class="nav-link"><span class="icon">📊</span> Dashboard</a><a href="venue.php" class="nav-link"><span class="icon">🏟️</span> Venues</a><a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a><?php include __DIR__ . '/_promotion_nav.php'; ?><a href="subscription.php" class="nav-link active"><span class="icon">💳</span> Subscription</a></nav><div class="sidebar-footer"><div class="admin-user-name"><?=htmlspecialchars($ownerName)?></div><a href="../auth/logout.php" class="btn-logout">Sign Out</a></div></aside><main class="admin-main"><div class="admin-topbar"><div class="topbar-title">Annual <span>Subscription</span></div></div><div class="admin-content">
+<?php if(isset($_GET['msg'])):?><div class="alert success" style="padding:13px;border-radius:12px;background:#f0fdf4;color:#166534;margin-bottom:16px">Subscription payment completed successfully.</div><?php endif;?>
+<section class="subscription-hero"><div><div class="eyebrow">One plan. One clear price.</div><h1>Everything needed to manage one venue.</h1><p>The annual subscription pays for listing and operating one venue on MeroMaidan. Promotional visibility is purchased separately and never changes the features in this plan.</p><div class="feature-list"><?php foreach($features as $feature):?><span><?=htmlspecialchars($feature)?></span><?php endforeach;?></div></div><div class="price-box"><small>ANNUAL VENUE SUBSCRIPTION</small><strong>NPR <?=number_format((float)$owner['price_yearly'])?></strong><span>per year · one venue included</span><div style="margin-top:20px"><a href="../esewa/payment.php?subscription_upgrade=1&plan_id=<?=$owner['plan_id']?>" class="btn btn-green">Renew annual subscription</a></div></div></section>
+<div class="service-separation"><article class="service-card"><h3>Annual venue subscription</h3><p><strong>NPR 9,999/year</strong><br>Listing and management access for one venue.</p></article><article class="service-card addon"><h3>Recommended Venue</h3><p><strong>NPR 1,000/month</strong><br>Optional location-based promotional visibility.</p></article><article class="service-card addon"><h3>Event Promotion</h3><p><strong>NPR 2,000/week</strong><br>Seven-day 1600×600 hero campaign and optional coupon.</p></article></div>
+<div class="status-grid"><section class="status-card"><div class="data-card-header"><h3>Subscription status</h3><span class="badge <?=htmlspecialchars($subscription['status']??'pending')?>"><?=htmlspecialchars(ucwords(str_replace('_',' ',$subscription['status']??'Pending Payment')))?></span></div><div class="status-row"><span>Plan</span><strong><?=htmlspecialchars($owner['plan_name'])?></strong></div><div class="status-row"><span>Included venues</span><strong><?=count($venues)?> / 1</strong></div><div class="status-row"><span>Start date</span><strong><?=htmlspecialchars($subscription['starts_at']??'Not activated')?></strong></div><div class="status-row"><span>Expiry date</span><strong><?=htmlspecialchars($subscription['expires_at']??'Not activated')?></strong></div><div class="status-row"><span>Days remaining</span><strong><?=$daysLeft?></strong></div></section><section class="status-card"><div class="data-card-header"><h3>Payment history</h3></div><?php if($payments):foreach($payments as $payment):?><div class="status-row"><span><?=date('d M Y',strtotime($payment['created_at']))?> · <?=htmlspecialchars(strtoupper($payment['payment_method']))?></span><strong>NPR <?=number_format($payment['amount_npr'])?> · <?=htmlspecialchars(ucfirst($payment['status']))?></strong></div><?php endforeach;else:?><p style="color:#64748b;font-size:13px;padding:20px 0">No subscription payments recorded yet.</p><?php endif;?></section></div>
+</div></main></div></body></html>

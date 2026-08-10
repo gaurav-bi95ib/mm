@@ -341,21 +341,6 @@ body {
 .modal-title { font-size: 18px; font-weight: 900; color: var(--dark-navy); margin-bottom: 8px; }
 .modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
 
-/* Rating Stars Input */
-.star-rating-input {
-  display: flex; gap: 8px; flex-direction: row-reverse;
-  justify-content: center; margin: 16px 0;
-}
-.star-rating-input input { display: none; }
-.star-rating-input label {
-  font-size: 32px; color: #cbd5e1; cursor: pointer; transition: color .15s;
-}
-.star-rating-input label:hover,
-.star-rating-input label:hover ~ label,
-.star-rating-input input:checked ~ label {
-  color: #f59e0b;
-}
-
 @media (max-width: 768px) {
   .player-sidebar { transform: translateX(-100%); }
   .player-main { margin-left: 0; }

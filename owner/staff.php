@@ -11,19 +11,22 @@ $msg = '';
 $err = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $action = $_POST['action'] ?? 'add_staff';
     if ($action === 'add_staff') {
         if (!checkSubscriptionLimits($ownerId, 'staff')) {
-            $err = '❌ Subscription Staff Limit Reached! Upgrade your plan to add more staff accounts.';
+            $err = 'The standard operational staff limit has been reached. Contact support if your venue needs help.';
         } else {
             $name  = trim($_POST['name'] ?? '');
             $email = trim($_POST['email'] ?? '');
             $phone = trim($_POST['phone'] ?? '');
-            $role  = $_POST['role'] ?? 'Field Admin';
+            $role  = in_array($_POST['role'] ?? '', ['Manager','Receptionist','Field Admin'], true) ? $_POST['role'] : 'Field Admin';
             $venue_id = (int)($_POST['assigned_venue_id'] ?? 0);
-            $pass  = password_hash($_POST['password'] ?? 'Staff@1234', PASSWORD_BCRYPT);
+            $plainPassword = $_POST['password'] ?? '';
+            $pass  = password_hash($plainPassword, PASSWORD_BCRYPT);
 
-            if ($name && $email) {
+            $venueCheck=$db->prepare("SELECT COUNT(*) FROM venues WHERE id=? AND owner_id=?");$venueCheck->execute([$venue_id,$ownerId]);
+            if ($name && filter_var($email,FILTER_VALIDATE_EMAIL) && strlen($plainPassword)>=8 && (!$venue_id||(int)$venueCheck->fetchColumn()>0)) {
                 try {
                     $stmt = $db->prepare("INSERT INTO tenant_staff (owner_id, name, email, phone, password_hash, role, assigned_venue_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')");
                     $stmt->execute([$ownerId, $name, $email, $phone, $pass, $role, $venue_id ?: null]);
@@ -32,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } catch (\PDOException $e) {
                     $err = '❌ Failed to create staff. Email may already be registered.';
                 }
-            }
+            } else $err = 'Enter a valid name, email, venue and password of at least 8 characters.';
         }
     } elseif ($action === 'delete_staff') {
         $staff_id = (int)($_POST['staff_id'] ?? 0);
@@ -84,6 +87,7 @@ $myVenues = $vStmt->fetchAll();
       <a href="staff.php" class="nav-link active"><span class="icon">👥</span> Staff & Roles</a>
       <a href="subscription.php" class="nav-link"><span class="icon">⭐</span> Subscription</a>
       <a href="notifications.php" class="nav-link"><span class="icon">🔔</span> Notifications</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -141,6 +145,7 @@ $myVenues = $vStmt->fetchAll();
                     <td><?= htmlspecialchars($s['email']) ?><br><small><?= htmlspecialchars($s['phone']) ?></small></td>
                     <td>
                       <form method="POST" style="display:inline;" onsubmit="return confirm('Remove staff member?');">
+                        <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
                         <input type="hidden" name="action" value="delete_staff">
                         <input type="hidden" name="staff_id" value="<?= $s['id'] ?>">
                         <button type="submit" class="btn btn-ghost btn-sm" style="color:#ef4444;">Remove</button>
@@ -157,6 +162,7 @@ $myVenues = $vStmt->fetchAll();
         <div class="data-card" style="padding:20px;">
           <h3 style="font-size:16px;margin-bottom:16px;">➕ Add Staff Member</h3>
           <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
             <input type="hidden" name="action" value="add_staff">
             
             <div class="form-group" style="margin-bottom:12px;">

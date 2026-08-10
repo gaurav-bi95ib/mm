@@ -14,20 +14,23 @@ $stmt->execute([':id' => $ownerId]);
 $owner = $stmt->fetch();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $name     = trim($_POST['name'] ?? '');
     $phone    = trim($_POST['phone'] ?? '');
     $business = trim($_POST['business_name'] ?? '');
     $newPass  = $_POST['new_password'] ?? '';
 
-    if (!$name || !$phone) {
-        $error = 'Name and phone number are required.';
+    if (!$name || !preg_match('/^(?:\+977[- ]?)?9[678]\d{8}$/', $phone)) {
+        $error = 'Enter a valid owner name and Nepal mobile number.';
+    } elseif ($newPass !== '' && strlen($newPass) < 8) {
+        $error = 'New password must be at least 8 characters.';
     } else {
         $db->prepare("UPDATE venue_owners SET name = :n, phone = :p, business_name = :b WHERE id = :id")
            ->execute([':n' => $name, ':p' => $phone, ':b' => $business, ':id' => $ownerId]);
 
         $_SESSION['owner_name'] = $name;
 
-        if ($newPass && strlen($newPass) >= 6) {
+        if ($newPass !== '') {
             $hash = password_hash($newPass, PASSWORD_BCRYPT);
             $db->prepare("UPDATE venue_owners SET password_hash = :h WHERE id = :id")->execute([':h' => $hash, ':id' => $ownerId]);
         }
@@ -69,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <a href="customers.php" class="nav-link"><span class="icon">👥</span> Customers (CRM)</a>
       <a href="reports.php" class="nav-link"><span class="icon">📈</span> Reports & Analytics</a>
       <a href="settings.php" class="nav-link active"><span class="icon">⚙️</span> Business Settings</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -103,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <h3>⚙️ Tenant Profile Details</h3>
         </div>
         <form method="POST" style="padding:24px;">
+          <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
           <div class="form-group" style="margin-bottom:16px;">
             <label style="display:block;font-size:12px;font-weight:800;color:#64748b;margin-bottom:6px;">Owner Full Name</label>
             <input type="text" name="name" class="form-input" value="<?= htmlspecialchars($owner['name']) ?>" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/api/db.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $playerName = $_SESSION['player_name'] ?? '';
 $playerEmail = $_SESSION['player_email'] ?? '';
@@ -11,7 +12,8 @@ $isPlayer = !empty($_SESSION['player_id']);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="pageTitle">Venue - MeroMaidan</title>
   <meta name="description" content="Book your sports ground slot online - real-time availability, instant confirmation.">
-  <link rel="stylesheet" href="assets/css/venue.css">
+  <meta name="csrf-token" content="<?=csrfToken()?>">
+  <link rel="stylesheet" href="assets/css/venue.css?v=20260810-coupon1">
 </head>
 <body>
 
@@ -29,17 +31,16 @@ $isPlayer = !empty($_SESSION['player_id']);
   </a>
   <nav>
     <a href="index.php">Home</a>
-    <a href="index.php#services" class="active">Futsal</a>
-    <a href="index.php#services">Locations ▾</a>
-    <a href="index.php#about">About Us</a>
-    <a href="index.php#contact">Contact</a>
+    <a href="index.php#services" class="active">Find Venues</a>
+    <a href="index.php#how-it-works">How It Works</a>
+    <a href="about.php">About Us</a>
   </nav>
   <div class="header-actions">
     <?php if ($isPlayer): ?>
       <a href="player/index.php" class="btn-signup" style="background:#1BB955;">⚽ My Dashboard</a>
     <?php else: ?>
       <a href="auth/login.php" class="btn-login">Log In</a>
-      <a href="auth/register.php" class="btn-signup">Sign Up Free</a>
+      <a href="auth/register.php" class="btn-signup">Create Account</a>
     <?php endif; ?>
   </div>
 </header>
@@ -67,9 +68,8 @@ $isPlayer = !empty($_SESSION['player_id']);
       <span class="venue-sport-badge" id="venueSport">Futsal</span>
     </div>
     <div class="venue-action-row">
-      <button class="btn-wishlist" title="Save to Wishlist">♡</button>
-      <button class="btn-share" title="Share" onclick="navigator.share && navigator.share({title:document.title,url:window.location.href})">⬆</button>
-      <a href="#booking-panel" class="btn-book-now">📅 Book Slot Now</a>
+      <button class="btn-share" id="shareVenueBtn" type="button" title="Share this venue" aria-label="Share this venue">↗</button>
+      <a href="#booking-panel" class="btn-book-now">Book a slot <span>→</span></a>
     </div>
   </div>
 
@@ -96,7 +96,7 @@ $isPlayer = !empty($_SESSION['player_id']);
 
       <!-- Venue Experience Chips -->
       <div class="experience-section">
-        <div class="section-label">Futsal Experience</div>
+        <div class="section-label" id="experienceLabel">Venue highlights</div>
         <div class="experience-chips" id="experienceChips">
           <!-- Dynamic -->
         </div>
@@ -137,10 +137,9 @@ $isPlayer = !empty($_SESSION['player_id']);
 
       <!-- Booking Note -->
       <div class="booking-note">
-        <span class="icon">📞</span>
+        <span class="icon">ℹ</span>
         <div>
-          <strong>Booking via Call/WhatsApp:</strong> Please use the phone number above to make your booking if online slots are not available.
-          <div style="margin-top:4px;color:#f59e0b;font-weight:700;">⚠ This slot is full. Look for other time slots.</div>
+          <strong>Availability guide:</strong> Available times can be selected online. Slots marked “Full” are already reserved—choose another time or contact the venue for help.
         </div>
       </div>
 
@@ -154,7 +153,10 @@ $isPlayer = !empty($_SESSION['player_id']);
 
       <!-- Amenities -->
       <div class="amenities-section">
-        <div class="section-title-main">Facilities & Amenities</div>
+        <div class="content-section-head">
+          <div><span class="content-kicker">What’s included</span><div class="section-title-main">Facilities & Amenities</div><p>Useful features available when you visit this venue.</p></div>
+          <span class="facility-status"><i></i> Venue facilities</span>
+        </div>
         <div class="amenities-grid" id="amenitiesGrid">
           <!-- Dynamic -->
         </div>
@@ -167,35 +169,21 @@ $isPlayer = !empty($_SESSION['player_id']);
 
       <!-- Rates Card -->
       <div class="rates-card" id="ratesCard">
-        <div class="rates-card-title"><span>💰</span> Current Rates</div>
+        <div class="rates-card-title"><span>रू</span> Venue rate</div>
         <div class="rate-item">
-          <div class="rate-label">Standard Rate</div>
+          <div class="rate-label">Starting hourly rate</div>
           <div class="rate-value">
             <sup>NPR</sup><span id="rateStandard">1,500</span><sub>/hr</sub>
           </div>
         </div>
-        <div class="rate-item">
-          <div class="rate-label">Peak Hours (5-9 PM)</div>
-          <div class="rate-value">
-            <sup>NPR</sup><span id="ratePeak">2,500</span><sub>/hr</sub>
-            <span class="rate-peak-badge">PEAK</span>
-          </div>
-        </div>
         <div class="rates-contact-box">
-          <p>Contact us for tournament bookings & corporate events</p>
+          <p>Need help or planning a group booking? Contact the venue directly.</p>
           <a href="tel:" class="phone-link" id="venuePhone">
             📞 <span id="phoneTxt">-</span>
           </a>
           <a href="https://wa.me/" class="phone-link" id="venueWA" style="margin-top:6px;">
             💬 WhatsApp
           </a>
-        </div>
-        <div class="rating-row">
-          <span class="star-score" id="ratingScore">4.8</span>
-          <div>
-            <div class="star-icons" id="starIcons">★★★★★</div>
-            <div class="reviews-count" id="reviewsCount">127 reviews</div>
-          </div>
         </div>
       </div>
 
@@ -215,8 +203,24 @@ $isPlayer = !empty($_SESSION['player_id']);
           <span>Duration</span>
           <span class="val">1 Hour</span>
         </div>
+        <div class="booking-summary-row price-row" id="summarySubtotalRow" hidden>
+          <span>Subtotal</span>
+          <span class="val" id="summarySubtotal">NPR 0</span>
+        </div>
+        <div class="booking-summary-row price-row discount-row" id="summaryDiscountRow" hidden>
+          <span>Coupon discount</span>
+          <span class="val" id="summaryDiscount">- NPR 0</span>
+        </div>
+        <div class="booking-summary-row price-row" id="summaryFeesRow" hidden>
+          <span>Fees</span>
+          <span class="val" id="summaryFees">NPR 0</span>
+        </div>
+        <div class="booking-summary-row price-row" id="summaryTaxRow" hidden>
+          <span>Taxes</span>
+          <span class="val" id="summaryTax">NPR 0</span>
+        </div>
         <div class="booking-total">
-          <span>Total</span>
+          <span id="summaryTotalLabel">Total</span>
           <span id="summaryTotal">NPR —</span>
         </div>
 
@@ -234,13 +238,16 @@ $isPlayer = !empty($_SESSION['player_id']);
             <label class="form-label" for="custPhone">Phone Number</label>
             <input type="tel" id="custPhone" class="form-input" placeholder="98XXXXXXXX" required>
           </div>
+          <div class="coupon-box">
+            <label class="form-label" for="couponCode">Coupon / Promo Code</label>
+            <div class="coupon-input-row"><input type="text" id="couponCode" class="form-input" maxlength="50" placeholder="Enter code"><button type="button" id="applyCouponBtn">Apply</button></div>
+            <p id="couponMessage" aria-live="polite">Optional. Invalid coupons will not change your price.</p>
+          </div>
           <div class="form-group">
             <label class="form-label">Payment Method</label>
             <div class="payment-methods">
               <div class="pay-method-btn selected" data-pay="cash">💵 Cash</div>
               <div class="pay-method-btn" data-pay="esewa">🟢 eSewa</div>
-              <div class="pay-method-btn" data-pay="khalti">🟣 Khalti</div>
-              <div class="pay-method-btn" data-pay="card">💳 Card</div>
             </div>
           </div>
 
@@ -274,9 +281,9 @@ $isPlayer = !empty($_SESSION['player_id']);
 
 <!-- Footer -->
 <footer class="venue-footer">
-  <p>© 2024 MeroMaidan. Nepal's Smart Sports Venue Booking Platform.</p>
+  <p>© <?=date('Y')?> MeroMaidan · Nepal's smart sports venue booking platform.</p>
 </footer>
 
-<script src="assets/js/venue.js"></script>
+<script src="assets/js/venue.js?v=20260810-coupon1"></script>
 </body>
 </html>

@@ -10,6 +10,9 @@ $date = trim($_GET['date'] ?? date('Y-m-d'));
 if (!$slug) {
     jsonResponse(['status' => 'error', 'message' => 'Venue slug required'], 400);
 }
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) {
+    jsonResponse(['status' => 'error', 'message' => 'A valid booking date is required'], 422);
+}
 
 // Get venue
 $stmt = $db->prepare("
@@ -42,23 +45,24 @@ $stmt = $db->prepare("
     FROM venue_slots vs
     LEFT JOIN bookings b ON (
         b.venue_id = vs.venue_id AND
-        b.booking_date = :date AND
+        b.booking_date = :booking_date AND
         b.start_time = vs.start_time AND
-        b.status IN ('confirmed','pending')
+        b.status IN ('confirmed','pending','checked_in','in_progress')
     )
     LEFT JOIN maintenance_blocks mb ON (
         mb.venue_id = vs.venue_id AND
-        mb.block_date = :date AND
-        vs.start_time >= mb.start_time AND
-        vs.start_time < mb.end_time
+        mb.block_date = :maintenance_date AND
+        vs.start_time < mb.end_time AND
+        vs.end_time > mb.start_time
     )
     WHERE vs.venue_id = :venue_id AND vs.day_of_week = :day AND vs.is_available = 1
     ORDER BY vs.start_time
 ");
 $stmt->execute([
-    ':date'     => $date,
-    ':venue_id' => $venue['id'],
-    ':day'      => $dayOfWeek,
+    ':booking_date'     => $date,
+    ':maintenance_date' => $date,
+    ':venue_id'         => $venue['id'],
+    ':day'              => $dayOfWeek,
 ]);
 $slots = $stmt->fetchAll();
 

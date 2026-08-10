@@ -3,24 +3,30 @@
 (function() {
   const params   = new URLSearchParams(window.location.search);
   const slug     = params.get('slug') || 'royal-futsal';
+  const eventPromotionId = Number(params.get('event')) || null;
+  const recommendedPromotionId = Number(params.get('recommended')) || null;
+  const couponFromUrl = (params.get('coupon') || '').trim().toUpperCase();
   let venueData  = null;
   let selectedDate = null;
   let selectedSlot = null;
   let selectedPay  = 'cash';
+  let appliedPricing = null;
 
   // ─── INIT ───────────────────────────────────────
   async function init() {
     await loadVenue(slug);
     initCalendar();
+    const couponInput = document.getElementById('couponCode');
+    if (couponInput && couponFromUrl) couponInput.value = couponFromUrl;
   }
 
   // ─── LOAD VENUE ─────────────────────────────────
   async function loadVenue(slug) {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const res   = await fetch(`api/venue_detail.php?slug=${slug}&date=${today}`);
+      const res   = await fetch(`api/venue_detail.php?slug=${encodeURIComponent(slug)}&date=${encodeURIComponent(today)}`);
       const data  = await res.json();
-      if (data.status !== 'success') throw new Error(data.message || 'Not found');
+      if (!res.ok || data.status !== 'success') throw new Error(data.message || 'Unable to load venue');
       venueData = data.venue;
       renderVenueMeta(venueData);
       selectedDate = today;
@@ -46,10 +52,13 @@
     const img = document.getElementById('heroCoverImg');
     img.src = v.cover_image || (v.images && v.images[0]) || '';
     img.alt = v.name;
+    img.onerror = () => {
+      img.onerror = null;
+      img.src = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1400&q=84';
+    };
 
     // Rates
     document.getElementById('rateStandard').textContent = Number(v.price_per_hour).toLocaleString();
-    document.getElementById('ratePeak').textContent     = Number(v.price_per_hour * 1.5).toLocaleString();
 
     // Contact
     if (v.owner_phone) {
@@ -59,25 +68,19 @@
     }
     document.getElementById('hiddenVenueId').value = v.id;
 
-    // Rating
-    const rating = parseFloat(v.rating) || 0;
-    document.getElementById('ratingScore').textContent  = rating.toFixed(1);
-    document.getElementById('reviewsCount').textContent = v.total_reviews + ' reviews';
-    document.getElementById('starIcons').textContent    = '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
-
     // Gallery
     const gallery = document.getElementById('galleryGrid');
     const images  = v.images || [];
     gallery.innerHTML = images.length
-      ? images.map(img => `<img src="${img}" alt="${v.name}" loading="lazy">`).join('')
+      ? images.map(image => `<img src="${escapeHtml(image)}" alt="${escapeHtml(v.name)}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=700&q=80'">`).join('')
       : '<p style="color:#64748b;font-size:13px;">No photos yet.</p>';
 
     // Amenities
     const amenGrid = document.getElementById('amenitiesGrid');
-    const amenIcons = {'Changing Room':'🚿','Parking':'🚗','CCTV':'📷','Floodlights':'💡','Drinking Water':'💧','First Aid':'🏥','WiFi':'📶','Cafeteria':'☕','Locker Room':'🔒','AC Waiting Area':'❄️','Canteen':'🍽️','Coaching Available':'🎓','Pavilion':'🏛️','Indoor AC':'❄️','Nets':'🥅','Sand Court':'🏖️'};
+    const amenIcons = {'Changing Room':'🚿','Parking':'🚗','CCTV':'📹','Floodlights':'💡','Drinking Water':'💧','First Aid':'✚','WiFi':'⌁','Cafeteria':'☕','Locker Room':'▣','AC Waiting Area':'❄','Canteen':'🍽','Coaching Available':'◉','Pavilion':'⌂','Indoor AC':'❄','Nets':'🥅','Sand Court':'◌'};
     amenGrid.innerHTML = (v.amenities || [])
-      .map(a => `<span class="amenity-tag">${amenIcons[a] || '✅'} ${a}</span>`)
-      .join('') || '<span style="color:#64748b;font-size:13px;">No amenities listed.</span>';
+      .map(a => `<article class="amenity-card"><span class="amenity-icon" aria-hidden="true">${amenIcons[a] || '✓'}</span><span class="amenity-copy"><strong>${escapeHtml(a)}</strong><small>Available at this venue</small></span><span class="amenity-check" aria-label="Available">✓</span></article>`)
+      .join('') || '<div class="amenities-empty"><span>⌁</span><strong>Facility details are being updated.</strong><small>Contact the venue if you need to confirm a specific facility.</small></div>';
 
     // Experience chips based on capacity/sport
     const chips = document.getElementById('experienceChips');
@@ -89,10 +92,12 @@
       'Match Ground': [{icon:'🏏',label:'Match Ground'},{icon:'🌿',label:'Natural Turf'},{icon:'📌',label:'Boundary Marked'},{icon:'📅',label:'Easy Booking'}],
     };
     const expChips = capMap[v.capacity] || [{icon:'🏟️',label:v.capacity},{icon:'💡',label:'Floodlights'},{icon:'📅',label:'Easy Booking'}];
+    const experienceLabel = document.getElementById('experienceLabel');
+    if (experienceLabel) experienceLabel.textContent = v.sport_type + ' venue highlights';
     chips.innerHTML = expChips.map(c => `
       <div class="exp-chip">
         <span class="icon">${c.icon}</span>
-        <span class="label">${c.label}</span>
+        <span class="label">${escapeHtml(c.label)}</span>
       </div>`).join('');
 
     // Directions
@@ -100,6 +105,22 @@
       const lat = v.lat || 27.7172;
       const lng = v.lng || 85.3240;
       window.open(`https://maps.google.com/?q=${lat},${lng}`, '_blank');
+    };
+
+    const shareButton = document.getElementById('shareVenueBtn');
+    if (shareButton) shareButton.onclick = async () => {
+      try {
+        if (navigator.share) await navigator.share({title: document.title, url: window.location.href});
+        else {
+          await navigator.clipboard.writeText(window.location.href);
+          const original = shareButton.textContent;
+          shareButton.textContent = '✓';
+          shareButton.title = 'Link copied';
+          setTimeout(() => { shareButton.textContent = original; shareButton.title = 'Share this venue'; }, 1600);
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') console.error('Unable to share venue:', error);
+      }
     };
   }
 
@@ -143,6 +164,7 @@
   async function selectDate(dateStr, el) {
     selectedDate = dateStr;
     selectedSlot = null;
+    resetCoupon(false);
     document.querySelectorAll('.cal-day').forEach(d => d.classList.remove('selected'));
     el.classList.add('selected');
     updateSummary();
@@ -154,10 +176,14 @@
     const container = document.getElementById('slotsContainer');
     container.innerHTML = '<div class="slots-loading">⏳ Loading slots...</div>';
     try {
-      const res  = await fetch(`api/venue_detail.php?slug=${slug}&date=${date}`);
+      const res  = await fetch(`api/venue_detail.php?slug=${encodeURIComponent(slug)}&date=${encodeURIComponent(date)}`);
       const data = await res.json();
+      if (!res.ok || data.status !== 'success') {
+        throw new Error(data.message || 'Unable to load slots');
+      }
       renderSlots(data.slots || []);
     } catch(e) {
+      console.error('Slot loading failed:', e);
       container.innerHTML = '<div class="slots-loading" style="color:#ef4444;">Failed to load slots.</div>';
     }
   }
@@ -191,6 +217,7 @@
       end:   el.dataset.end,
       price: el.dataset.price
     };
+    resetCoupon(false);
     document.getElementById('hiddenStartTime').value = selectedSlot.start;
     document.getElementById('hiddenEndTime').value   = selectedSlot.end;
     document.getElementById('hiddenPrice').value     = selectedSlot.price;
@@ -202,8 +229,104 @@
     document.getElementById('summaryDate').textContent  = selectedDate ? formatDisplayDate(selectedDate) : 'Not selected';
     document.getElementById('summarySlot').textContent  = selectedSlot ? formatTime(selectedSlot.start) + ' – ' + formatTime(selectedSlot.end) : 'Not selected';
     document.getElementById('summaryTotal').textContent = selectedSlot ? 'NPR ' + Number(selectedSlot.price).toLocaleString() : 'NPR —';
+    if (appliedPricing) document.getElementById('summaryTotal').textContent = 'NPR ' + Number(appliedPricing.final_amount).toLocaleString();
     document.getElementById('btnConfirmBooking').disabled = !(selectedDate && selectedSlot);
   }
+
+  function renderPriceBreakdown() {
+    const subtotalRow = document.getElementById('summarySubtotalRow');
+    const discountRow = document.getElementById('summaryDiscountRow');
+    const feesRow = document.getElementById('summaryFeesRow');
+    const taxRow = document.getElementById('summaryTaxRow');
+    const totalLabel = document.getElementById('summaryTotalLabel');
+    if (!appliedPricing) {
+      subtotalRow.hidden = true;
+      discountRow.hidden = true;
+      feesRow.hidden = true;
+      taxRow.hidden = true;
+      totalLabel.textContent = 'Total';
+      return;
+    }
+    const fees = Number(appliedPricing.fees_amount || 0);
+    const taxes = Number(appliedPricing.tax_amount || 0);
+    subtotalRow.hidden = false;
+    discountRow.hidden = false;
+    feesRow.hidden = fees === 0;
+    taxRow.hidden = taxes === 0;
+    totalLabel.textContent = 'Final Total';
+    document.getElementById('summarySubtotal').textContent = 'NPR ' + Number(appliedPricing.base_price).toLocaleString();
+    document.getElementById('summaryDiscount').textContent = '- NPR ' + Number(appliedPricing.discount_amount).toLocaleString();
+    document.getElementById('summaryFees').textContent = 'NPR ' + fees.toLocaleString();
+    document.getElementById('summaryTax').textContent = 'NPR ' + taxes.toLocaleString();
+  }
+
+  function resetCoupon(clearInput = false) {
+    appliedPricing = null;
+    const input = document.getElementById('couponCode');
+    const message = document.getElementById('couponMessage');
+    if (clearInput && input) input.value = '';
+    if (message) {
+      message.className = '';
+      message.textContent = 'Optional. Invalid coupons will not change your price.';
+    }
+    renderPriceBreakdown();
+    updateSummary();
+  }
+
+  document.getElementById('couponCode').addEventListener('input', () => {
+    if (appliedPricing) resetCoupon(false);
+  });
+
+  document.getElementById('applyCouponBtn').addEventListener('click', async () => {
+    const input = document.getElementById('couponCode');
+    const message = document.getElementById('couponMessage');
+    const button = document.getElementById('applyCouponBtn');
+    const code = input.value.trim().toUpperCase();
+    input.value = code;
+    if (!selectedSlot) {
+      message.className = 'error';
+      message.textContent = 'Choose a date and time before applying a coupon.';
+      return;
+    }
+    if (!code) {
+      resetCoupon(false);
+      message.className = 'error';
+      message.textContent = 'Enter a coupon code first.';
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Checking...';
+    try {
+      const response = await fetch('api/validate_coupon.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          venue_id: Number(document.getElementById('hiddenVenueId').value),
+          booking_date: selectedDate,
+          start_time: selectedSlot.start,
+          coupon_code: code,
+          customer_phone: document.getElementById('custPhone').value.trim(),
+          csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || ''
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Coupon could not be applied.');
+      appliedPricing = result.pricing;
+      message.className = 'success';
+      message.textContent = `${code} applied · NPR ${Number(appliedPricing.discount_amount).toLocaleString()} discount · Final total NPR ${Number(appliedPricing.final_amount).toLocaleString()}.`;
+      renderPriceBreakdown();
+      updateSummary();
+    } catch (error) {
+      appliedPricing = null;
+      message.className = 'error';
+      message.textContent = error.message || 'Coupon could not be applied.';
+      renderPriceBreakdown();
+      updateSummary();
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Apply';
+    }
+  });
 
   // ─── PAYMENT METHODS ────────────────────────────
   document.querySelectorAll('.pay-method-btn').forEach(btn => {
@@ -224,6 +347,7 @@
     btn.textContent = '⏳ Confirming...';
 
     const payload = {
+      csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '',
       venue_id:       document.getElementById('hiddenVenueId').value,
       customer_name:  document.getElementById('custName').value,
       customer_phone: document.getElementById('custPhone').value,
@@ -231,6 +355,9 @@
       start_time:     selectedSlot.start,
       end_time:       selectedSlot.end,
       total_price:    selectedSlot.price,
+      coupon_code:    appliedPricing ? appliedPricing.coupon_code : '',
+      event_promotion_id: eventPromotionId,
+      recommended_promotion_id: recommendedPromotionId,
       payment_method: selectedPay,
     };
 
@@ -240,13 +367,17 @@
       form.action = 'esewa/payment.php';
       
       const fields = {
+        csrf_token: document.querySelector('meta[name="csrf-token"]')?.content || '',
         venue_id: document.getElementById('hiddenVenueId').value,
         customer_name: document.getElementById('custName').value,
         customer_phone: document.getElementById('custPhone').value,
         booking_date: selectedDate,
         start_time: selectedSlot.start,
         end_time: selectedSlot.end,
-        total_price: selectedSlot.price
+        total_price: selectedSlot.price,
+        coupon_code: appliedPricing ? appliedPricing.coupon_code : '',
+        event_promotion_id: eventPromotionId || '',
+        recommended_promotion_id: recommendedPromotionId || ''
       };
       
       for (const [k, v] of Object.entries(fields)) {
@@ -273,6 +404,7 @@
         await loadSlots(selectedDate);
         document.getElementById('bookingForm').reset();
         selectedSlot = null;
+        resetCoupon(true);
         updateSummary();
       } else {
         alert('❌ ' + result.message);
@@ -302,6 +434,9 @@
     const ampm = hr >= 12 ? 'PM' : 'AM';
     const h12 = hr % 12 || 12;
     return `${h12}:${m} ${ampm}`;
+  }
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
   }
   function formatDisplayDate(d) {
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {weekday:'short',year:'numeric',month:'short',day:'numeric'});

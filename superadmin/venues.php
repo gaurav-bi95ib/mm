@@ -3,15 +3,23 @@ require_once __DIR__ . '/../api/db.php';
 requireSuperAdmin();
 $db = getDB();
 
-// Actions
-if (isset($_GET['action'], $_GET['id'])) {
-    $id     = (int)$_GET['id'];
-    $action = $_GET['action'];
+// State changes are POST-only and CSRF-protected.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'])) {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        die('Your session expired. Please return and try again.');
+    }
+    $id     = (int)$_POST['id'];
+    $action = $_POST['action'];
     if ($action === 'approve') {
         $db->prepare("UPDATE venues SET status='active' WHERE id=:id")->execute([':id'=>$id]);
     } elseif ($action === 'reject' || $action === 'suspend') {
         $db->prepare("UPDATE venues SET status='suspended' WHERE id=:id")->execute([':id'=>$id]);
+    } else {
+        http_response_code(400);
+        die('Unsupported venue action.');
     }
+    logAudit('moderate_venue','Venues','venue',$id,$action.' venue');
     header('Location: venues.php');
     exit;
 }
@@ -58,7 +66,10 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
       <a href="owners.php" class="nav-link"><span class="icon">👤</span> Owners</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="applications.php" class="nav-link"><span class="icon">📋</span> Applications <?php if($appsCount>0): ?><span class="badge orange"><?=$appsCount?></span><?php endif;?></a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
       <div class="nav-section-label">System</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -100,7 +111,7 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
       <div class="data-card">
         <table class="data-table">
           <thead><tr>
-            <th>Venue</th><th>Owner</th><th>Sport</th><th>Location</th><th>Rate/hr</th><th>Rating</th><th>Plan</th><th>Status</th><th>Actions</th>
+            <th>Venue</th><th>Owner</th><th>Sport</th><th>Location</th><th>Rate/hr</th><th>Plan</th><th>Status</th><th>Actions</th>
           </tr></thead>
           <tbody>
           <?php foreach($venues as $v): ?>
@@ -116,18 +127,17 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
             <td><span class="badge pending"><?=htmlspecialchars($v['sport_type'])?></span></td>
             <td><?=htmlspecialchars($v['city'])?>, <?=htmlspecialchars($v['district'])?></td>
             <td><strong>NPR <?=number_format($v['price_per_hour'])?></strong></td>
-            <td>⭐ <?=$v['rating']?> <span style="font-size:11px;color:#64748b;">(<?=$v['total_reviews']?>)</span></td>
-            <td><span class="badge <?=strtolower($v['plan_name']??'free')?>"><?=$v['plan_name']??'Free'?></span></td>
+            <td><span class="badge active"><?=htmlspecialchars($v['plan_name']??'Annual Venue Subscription')?></span></td>
             <td><span class="badge <?=$v['status']?>"><?=ucfirst($v['status'])?></span></td>
             <td>
               <div style="display:flex;gap:6px;flex-wrap:wrap;">
                 <?php if($v['status']==='pending'): ?>
-                <a href="?action=approve&id=<?=$v['id']?>" class="btn btn-green btn-sm">✓ Approve</a>
-                <a href="?action=reject&id=<?=$v['id']?>" class="btn btn-red btn-sm" onclick="return confirm('Reject this venue?')">✕</a>
+                <form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="approve" class="btn btn-green btn-sm">✓ Approve</button></form>
+                <form method="post" style="display:inline" onsubmit="return confirm('Reject this venue?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="reject" class="btn btn-red btn-sm">✕</button></form>
                 <?php elseif($v['status']==='active'): ?>
-                <a href="?action=suspend&id=<?=$v['id']?>" class="btn btn-ghost btn-sm" onclick="return confirm('Suspend this venue?')">⏸ Suspend</a>
+                <form method="post" style="display:inline" onsubmit="return confirm('Suspend this venue?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="suspend" class="btn btn-ghost btn-sm">⏸ Suspend</button></form>
                 <?php else: ?>
-                <a href="?action=approve&id=<?=$v['id']?>" class="btn btn-green btn-sm">▶ Activate</a>
+                <form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$v['id']?>"><button name="action" value="approve" class="btn btn-green btn-sm">▶ Activate</button></form>
                 <?php endif; ?>
                 <a href="../venue.php?slug=<?=urlencode($v['slug'])?>" target="_blank" class="btn btn-ghost btn-sm">👁 View</a>
               </div>

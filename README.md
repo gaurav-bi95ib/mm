@@ -1,56 +1,68 @@
-# MeroMaidan - Nepal's Smart Sports Venue Booking Platform
+# MeroMaidan - Nepal Sports Venue Marketplace
 
-A full-stack multi-tenant SaaS web application for discovering and booking sports venues across Nepal. Built with PHP, MySQL, and vanilla JS.
+MeroMaidan is a multi-tenant PHP and MySQL application for discovering, booking, and operating sports venues across Nepal.
 
-## 🚀 Features
+## Product areas
 
-- **Player Portal** – Search, filter, book venues, manage bookings, favorites, reviews, notifications
-- **Owner Portal** – Venue CRUD, slot pricing, field operations, staff roles, CRM, promotions, subscription management
-- **Super Admin Panel** – Governance dashboard, tenant management, SaaS plan config, audit logs, CMS, review moderation
-- **Mock eSewa Payment Gateway** – Realistic Nepali payment flow with invoice generation
-- **Interactive Map** – Leaflet.js powered venue discovery map
-- **Notification System** – In-app notifications across all user roles
+- Player portal: search, booking, favourites, payments, invoices, and notifications
+- Venue Owner portal: one-venue management, slots, pricing, operations, staff, reports, subscription, and promotions
+- Super Admin portal: tenant governance, commercial service configuration, dedicated Recommended Venue management, Event Promotion moderation, payments, audit logs, and CMS
+- Marketplace: swipeable CMS/event hero, organic venue discovery, clearly labelled Recommended Venues, and venue booking
+- Mock eSewa gateway: local booking, subscription, and promotional payment testing
 
-## 🛠️ Tech Stack
+MeroMaidan intentionally has no customer feedback, review, or rating feature.
 
-- **Backend:** PHP (Procedural) + MySQL (PDO)
-- **Frontend:** HTML5, Vanilla CSS, Vanilla JavaScript
-- **Map:** Leaflet.js + OpenStreetMap
-- **Server:** Apache (XAMPP)
+## Commercial model
 
-## 📦 Setup
+There are exactly three separate commercial services:
 
-1. Install [XAMPP](https://www.apachefriends.org/)
-2. Clone this repo into `C:\xampp\htdocs\mm`
-3. Start Apache and MySQL in XAMPP
-4. Import `meromaidan_full.sql` via phpMyAdmin **OR** run `php db/seed_complete.php`
-5. Visit `http://localhost/mm`
+- Annual Venue Subscription: NPR 9,999/year for one venue
+- Recommended Venue: NPR 1,000/month for clearly labelled location-based visibility
+- Event Promotion: NPR 2,000 for one seven-day 1600×600 hero campaign, with an optional venue coupon and Super Admin approval
 
-## 🔐 Test Credentials (Password: `Admin@1234`)
+Recommended placement and Event Promotion are optional advertising services. They are not subscription tiers and do not modify organic search ranking.
+Recommended Venue orders are purchased by venue owners through the mock eSewa gateway only. Super Admin can edit and moderate submitted orders but cannot manually manufacture a successful payment.
 
-| Role | Email |
-|------|-------|
-| Player | anil@example.com |
-| Owner | ramesh@royalfutsal.com |
-| Super Admin | admin@meromaidan.com |
+## Technology
 
-## 📁 Project Structure
+- PHP with PDO
+- MySQL
+- HTML, CSS, and vanilla JavaScript
+- Leaflet and OpenStreetMap
+- Apache through XAMPP
 
+## Setup
+
+1. Install XAMPP.
+2. Put the project at `C:\xampp\htdocs\mm`.
+3. Start Apache and MySQL.
+4. For a clean installation, import `meromaidan_full.sql` or run `C:\xampp\php\php.exe db/seed_complete.php`. Both include the current commercial model and cleanup.
+5. Only when upgrading an older database, apply `db/migration_v3_cms.sql`, `db/migration_v4_business_model.sql`, `db/migration_v5_remove_feedback_legacy_promotions.sql`, and `db/migration_v6_remove_featured.sql` in that order.
+6. Open `http://localhost/mm`.
+
+## Test credentials
+
+All seeded test users use password `Admin@1234`.
+
+| Role | Login page | Email |
+|---|---|---|
+| Player | `/auth/login.php` | `anil@example.com` |
+| Venue Owner | `/auth/owner-login.php` | `ramesh@royalfutsal.com` |
+| Super Admin | `/auth/admin-login.php` | `admin@meromaidan.com` |
+
+## Main folders
+
+```text
+api/          JSON endpoints and shared backend logic
+assets/       CSS and JavaScript
+auth/         separated player, owner, and admin authentication
+db/           schema, seeders, and migrations
+esewa/        local mock payment workflow
+owner/        venue-owner workspace
+player/       player workspace
+superadmin/   platform governance workspace
 ```
-mm/
-├── api/            # REST API endpoints (booking, search, reviews, notifications)
-├── assets/         # CSS & JS files
-├── auth/           # Login, register, logout
-├── db/             # Database seeder & migrations
-├── esewa/          # Mock eSewa payment gateway
-├── owner/          # Venue owner dashboard
-├── player/         # Player dashboard
-├── superadmin/     # Super admin governance panel
-├── index.php       # Public homepage & venue marketplace
-├── venue.php       # Venue detail & booking page
-└── list-ground.php # Owner onboarding form
-```
 
-## 📄 License
+## License
 
-MIT License © 2026 MeroMaidan
+MIT License, 2026 MeroMaidan.

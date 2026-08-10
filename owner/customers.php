@@ -54,6 +54,7 @@ if (!empty($venueIds)) {
       <a href="customers.php" class="nav-link active"><span class="icon">👥</span> Customers (CRM)</a>
       <a href="reports.php" class="nav-link"><span class="icon">📈</span> Reports & Analytics</a>
       <a href="settings.php" class="nav-link"><span class="icon">⚙️</span> Business Settings</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>

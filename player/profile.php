@@ -13,6 +13,7 @@ $stmt->execute([':id' => $playerId]);
 $player = $stmt->fetch();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $name    = trim($_POST['name'] ?? '');
     $phone   = trim($_POST['phone'] ?? '');
     $newPass = $_POST['new_password'] ?? '';
@@ -20,22 +21,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$name) {
         $error = 'Full name is required.';
+    } elseif ($phone !== '' && !preg_match('/^(?:\+977[- ]?)?9[678]\d{8}$/', $phone)) {
+        $error = 'Enter a valid Nepal mobile number.';
+    } elseif ($newPass !== '' && strlen($newPass) < 8) {
+        $error = 'New password must be at least 8 characters.';
+    } elseif ($newPass !== $confirm) {
+        $error = 'Passwords do not match.';
     } else {
         $db->prepare("UPDATE players SET name = :n, phone = :p WHERE id = :id")
            ->execute([':n' => $name, ':p' => $phone, ':id' => $playerId]);
 
         $_SESSION['player_name'] = $name;
 
-        if ($newPass) {
-            if (strlen($newPass) < 6) {
-                $error = 'New password must be at least 6 characters.';
-            } elseif ($newPass !== $confirm) {
-                $error = 'Passwords do not match.';
-            } else {
-                $hash = password_hash($newPass, PASSWORD_BCRYPT);
-                $db->prepare("UPDATE players SET password_hash = :h WHERE id = :id")->execute([':h' => $hash, ':id' => $playerId]);
-                $msg = '✅ Profile & Password updated successfully!';
-            }
+        if ($newPass !== '') {
+            $hash = password_hash($newPass, PASSWORD_BCRYPT);
+            $db->prepare("UPDATE players SET password_hash = :h WHERE id = :id")->execute([':h' => $hash, ':id' => $playerId]);
+            $msg = '✅ Profile & Password updated successfully!';
         } else {
             $msg = '✅ Profile updated successfully!';
         }
@@ -120,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
           <div style="margin-bottom:16px;">
             <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">Full Name</label>
             <input type="text" name="name" class="form-input" value="<?= htmlspecialchars($player['name']) ?>" required style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-family:inherit;">

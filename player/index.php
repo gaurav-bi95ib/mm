@@ -194,7 +194,7 @@ $favorites = $favStmt->fetchAll();
                 <img src="<?= htmlspecialchars($v['cover_image'] ?? 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=600&q=80') ?>" style="width:100%;height:120px;object-fit:cover;">
                 <div style="padding:14px;">
                   <h4 style="font-size:14px;font-weight:800;color:#0f2740;"><?= htmlspecialchars($v['name']) ?></h4>
-                  <div style="font-size:12px;color:#64748b;margin:4px 0;">📍 <?= htmlspecialchars($v['city']) ?> · ⭐ <?= $v['rating'] ?></div>
+                  <div style="font-size:12px;color:#64748b;margin:4px 0;">📍 <?= htmlspecialchars($v['city']) ?></div>
                   <a href="../venue.php?slug=<?= urlencode($v['slug']) ?>" class="btn-action primary" style="width:100%;justify-content:center;margin-top:10px;">Book Now</a>
                 </div>
               </div>

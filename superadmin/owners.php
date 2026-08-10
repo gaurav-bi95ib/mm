@@ -3,14 +3,20 @@ require_once __DIR__ . '/../api/db.php';
 requireSuperAdmin();
 $db = getDB();
 
-// Handle actions
-if(isset($_GET['action'],$_GET['id'])){
-    $id=(int)$_GET['id'];
-    if($_GET['action']==='activate')  $db->prepare("UPDATE venue_owners SET status='active' WHERE id=:id")->execute([':id'=>$id]);
-    if($_GET['action']==='suspend')   $db->prepare("UPDATE venue_owners SET status='suspended' WHERE id=:id")->execute([':id'=>$id]);
-    if($_GET['action']==='set_plan' && isset($_GET['plan_id'])){
-        $db->prepare("UPDATE venue_owners SET plan_id=:plan WHERE id=:id")->execute([':plan'=>$_GET['plan_id'],':id'=>$id]);
-    }
+// Owner account changes are POST-only and CSRF-protected.
+if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['action'],$_POST['id'])){
+    if(!verifyCsrfToken($_POST['csrf_token']??'')){http_response_code(403);die('Your session expired. Please return and try again.');}
+    $id=(int)$_POST['id'];
+    $action=$_POST['action'];
+    if($action==='activate')  $db->prepare("UPDATE venue_owners SET status='active' WHERE id=:id")->execute([':id'=>$id]);
+    elseif($action==='suspend') $db->prepare("UPDATE venue_owners SET status='suspended' WHERE id=:id")->execute([':id'=>$id]);
+    elseif($action==='set_plan'){
+        $planId=(int)($_POST['plan_id']??0);
+        $plan=$db->prepare("SELECT id FROM subscription_plans WHERE id=? AND is_active=1");$plan->execute([$planId]);
+        if(!$plan->fetchColumn()){http_response_code(400);die('Invalid subscription plan.');}
+        $db->prepare("UPDATE venue_owners SET plan_id=:plan WHERE id=:id")->execute([':plan'=>$planId,':id'=>$id]);
+    } else {http_response_code(400);die('Unsupported owner action.');}
+    logAudit('manage_owner','Tenant','venue_owner',$id,$action.' owner account');
     header('Location: owners.php'); exit;
 }
 
@@ -49,7 +55,10 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
       <a href="owners.php" class="nav-link active"><span class="icon">👤</span> Owners</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="applications.php" class="nav-link"><span class="icon">📋</span> Applications <?php if($appsCount>0): ?><span class="badge orange"><?=$appsCount?></span><?php endif;?></a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
       <div class="nav-section-label">System</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -91,7 +100,8 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
               <td><strong><?=$o['venue_count']?></strong></td>
               <td><strong><?=$o['total_bookings']?></strong></td>
               <td>
-                <form method="GET" style="display:inline;">
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
                   <input type="hidden" name="action" value="set_plan">
                   <input type="hidden" name="id" value="<?=$o['id']?>">
                   <select name="plan_id" class="filter-select" style="padding:4px 10px;font-size:12px;" onchange="this.form.submit()">
@@ -106,9 +116,9 @@ $adminName    = $_SESSION['superadmin_name'] ?? 'Admin';
               <td>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                   <?php if($o['status']==='active'): ?>
-                  <a href="?action=suspend&id=<?=$o['id']?>" class="btn btn-red btn-sm" onclick="return confirm('Suspend this owner?')">⏸ Suspend</a>
+                  <form method="post" style="display:inline" onsubmit="return confirm('Suspend this owner?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$o['id']?>"><button name="action" value="suspend" class="btn btn-red btn-sm">⏸ Suspend</button></form>
                   <?php else: ?>
-                  <a href="?action=activate&id=<?=$o['id']?>" class="btn btn-green btn-sm">▶ Activate</a>
+                  <form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="id" value="<?=$o['id']?>"><button name="action" value="activate" class="btn btn-green btn-sm">▶ Activate</button></form>
                   <?php endif;?>
                   <a href="bookings.php" class="btn btn-ghost btn-sm">📅 Bookings</a>
                 </div>

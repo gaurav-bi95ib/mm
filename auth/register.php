@@ -19,12 +19,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm = $_POST['confirm_password'] ?? '';
     $old = compact('name','email','phone');
 
-    if (!$name || !$email || !$pass || !$confirm) {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Your session expired. Refresh the page and try again.';
+    } elseif (!$name || !$email || !$pass || !$confirm) {
         $error = 'All fields are required.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
-    } elseif (strlen($pass) < 6) {
-        $error = 'Password must be at least 6 characters.';
+    } elseif ($phone !== '' && !preg_match('/^(?:\+977[- ]?)?9[678]\d{8}$/', $phone)) {
+        $error = 'Please enter a valid Nepal mobile number.';
+    } elseif (strlen($pass) < 8) {
+        $error = 'Password must be at least 8 characters.';
     } elseif ($pass !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
@@ -32,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $db->prepare("SELECT id FROM players WHERE email=:e LIMIT 1");
         $stmt->execute([':e' => $email]);
         if ($stmt->fetch()) {
-            $error = 'An account with this email already exists. <a href="login.php?role=player">Log in?</a>';
+            $error = 'An account with this email already exists. <a href="login.php">Log in?</a>';
         } else {
             $hash = password_hash($pass, PASSWORD_BCRYPT);
             $stmt = $db->prepare("INSERT INTO players (name,email,phone,password_hash,status) VALUES (:n,:e,:p,:h,'active')");
@@ -41,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['player_id']   = $playerId;
             $_SESSION['player_name'] = $name;
             $_SESSION['player_email']= $email;
+            session_regenerate_id(true);
             logAudit('register','IAM','player',$playerId,"New player registered: $email");
             header('Location: ' . APP_URL . '/player/index.php?welcome=1');
             exit;
@@ -202,26 +207,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <li><div class="feat-icon">🔍</div> Search venues by sport, location & price</li>
       <li><div class="feat-icon">⚡</div> Real-time availability & instant confirmation</li>
       <li><div class="feat-icon">📅</div> Manage all bookings from your dashboard</li>
-      <li><div class="feat-icon">⭐</div> Rate venues & save your favorites</li>
+      <li><div class="feat-icon">❤️</div> Save favorite venues for later</li>
     </ul>
 
     <div class="stats-row">
       <div class="stat-pill"><div class="num">100+</div><div class="lbl">Venues</div></div>
       <div class="stat-pill"><div class="num">5K+</div><div class="lbl">Players</div></div>
-      <div class="stat-pill"><div class="num">4.8★</div><div class="lbl">Rating</div></div>
+      <div class="stat-pill"><div class="num">24/7</div><div class="lbl">Online access</div></div>
     </div>
   </div>
 
   <!-- Right Form Panel -->
   <div class="reg-right">
     <div class="form-title">Create Your Account</div>
-    <div class="form-sub">Already have one? <a href="login.php?role=player">Sign in here</a></div>
+    <div class="form-sub">Already have one? <a href="login.php">Sign in here</a></div>
 
     <?php if ($error): ?>
       <div class="alert error">⚠ <?= $error ?></div>
     <?php endif; ?>
 
     <form method="POST" action="">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES) ?>">
       <div class="input-row">
         <div class="form-group">
           <label class="form-label" for="reg-name">Full Name</label>
@@ -248,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="form-label" for="reg-pass">Password</label>
         <div class="password-wrap">
           <input type="password" id="reg-pass" name="password" class="form-input"
-                 placeholder="Min. 6 characters" required>
+                 placeholder="Min. 8 characters" minlength="8" required>
           <button type="button" class="pass-toggle" onclick="togglePass('reg-pass', this)">👁</button>
         </div>
       </div>
@@ -274,13 +280,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         🚀 Create My Account
       </button>
     </form>
-
-    <div class="divider"><hr><span>Or sign in as</span><hr></div>
-
-    <div class="alt-links">
-      <a class="alt-link" href="login.php?role=owner">🏟 Venue Owner</a>
-      <a class="alt-link" href="login.php?role=admin">⚙ Admin Panel</a>
-    </div>
 
     <div class="sign-in-link">
       <a href="../index.php">← Back to MeroMaidan</a>

@@ -6,7 +6,8 @@ requireOwner();
 $db = getDB();
 $ownerId = $_SESSION['owner_id'];
 
-if (isset($_GET['mark_all'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_all') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $db->prepare("UPDATE notifications SET is_read = 1 WHERE tenant_id = ? AND role = 'owner'")->execute([$ownerId]);
     header("Location: notifications.php");
     exit;
@@ -51,6 +52,8 @@ $notifications = $stmt->fetchAll();
   <a href="bookings.php" class="nav-item">📅 Bookings</a>
   <a href="venue.php" class="nav-item">🏟️ Venue CRUD</a>
   <a href="slots.php" class="nav-item">⏱️ Slot Pricing</a>
+  <a href="recommended-promotion.php" class="nav-item">R &nbsp;Recommended Venue</a>
+  <a href="event-promotion.php" class="nav-item">E &nbsp;Event Promotion</a>
   <a href="field_ops.php" class="nav-item">📋 Field Operations</a>
   <a href="staff.php" class="nav-item">👥 Staff & Roles</a>
   <a href="subscription.php" class="nav-item">⭐ Subscription</a>
@@ -61,7 +64,7 @@ $notifications = $stmt->fetchAll();
 <div class="main-content">
   <div class="page-header">
     <h1 class="page-title">Tenant Notifications</h1>
-    <a href="notifications.php?mark_all=1" class="btn-read-all">✓ Mark All as Read</a>
+    <form method="post"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="action" value="mark_all"><button class="btn-read-all" style="border:0;cursor:pointer">✓ Mark All as Read</button></form>
   </div>
 
   <div class="notif-list">

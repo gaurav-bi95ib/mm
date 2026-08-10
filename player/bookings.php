@@ -24,11 +24,6 @@ $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $bookings = $stmt->fetchAll();
 
-// Check if review already exists for each completed booking
-$reviewedBookings = [];
-$revStmt = $db->prepare("SELECT booking_id FROM reviews WHERE player_id = :pid");
-$revStmt->execute([':pid' => $playerId]);
-$reviewedBookings = $revStmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -90,7 +85,7 @@ $reviewedBookings = $revStmt->fetchAll(PDO::FETCH_COLUMN);
     <div class="player-content">
       <div class="page-header">
         <h1>Booking History</h1>
-        <p>View, cancel, or rate your sports venue reservations.</p>
+        <p>View, manage, or cancel your sports venue reservations.</p>
       </div>
 
       <!-- Filter Bar -->
@@ -134,12 +129,6 @@ $reviewedBookings = $revStmt->fetchAll(PDO::FETCH_COLUMN);
                     <a href="../esewa/invoice.php?booking_id=<?= $b['id'] ?>" target="_blank" class="btn-action secondary" style="padding:4px 8px;font-size:11px;" title="View Invoice">🧾 Invoice</a>
                     <?php if (in_array($b['status'], ['confirmed', 'pending'])): ?>
                       <button class="btn-action danger" onclick="cancelBooking(<?= $b['id'] ?>)">✕ Cancel</button>
-                    <?php elseif ($b['status'] === 'completed'): ?>
-                      <?php if (in_array($b['id'], $reviewedBookings)): ?>
-                        <span style="font-size:12px;color:#16a34a;font-weight:700;">✓ Reviewed</span>
-                      <?php else: ?>
-                        <button class="btn-action primary" onclick="openReviewModal(<?= $b['id'] ?>, <?= $b['venue_id'] ?>, '<?= htmlspecialchars($b['venue_name'], ENT_QUOTES) ?>')">⭐ Rate</button>
-                      <?php endif; ?>
                     <?php else: ?>
                       <span style="font-size:12px;color:#94a3b8;">-</span>
                     <?php endif; ?>
@@ -160,44 +149,13 @@ $reviewedBookings = $revStmt->fetchAll(PDO::FETCH_COLUMN);
   </main>
 </div>
 
-<!-- Review Modal -->
-<div class="modal-overlay" id="reviewModal">
-  <div class="modal-card">
-    <div class="modal-title">⭐ Leave a Review</div>
-    <div class="modal-sub" id="reviewModalVenueName">Rate your experience at the ground</div>
-
-    <form id="reviewForm">
-      <input type="hidden" id="reviewBookingId">
-      <input type="hidden" id="reviewVenueId">
-
-      <div class="star-rating-input">
-        <input type="radio" id="star5" name="rating" value="5" checked><label for="star5">★</label>
-        <input type="radio" id="star4" name="rating" value="4"><label for="star4">★</label>
-        <input type="radio" id="star3" name="rating" value="3"><label for="star3">★</label>
-        <input type="radio" id="star2" name="rating" value="2"><label for="star2">★</label>
-        <input type="radio" id="star1" name="rating" value="1"><label for="star1">★</label>
-      </div>
-
-      <div style="margin-bottom:16px;">
-        <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">Your Review (Optional)</label>
-        <textarea id="reviewText" style="width:100%;height:90px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px;" placeholder="Great turf, good lighting..."></textarea>
-      </div>
-
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button type="button" class="btn-action secondary" onclick="closeReviewModal()">Cancel</button>
-        <button type="submit" class="btn-action primary">Submit Review</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <script>
 function cancelBooking(id) {
   if (!confirm('Are you sure you want to cancel this booking?')) return;
   fetch('../api/cancel_booking.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ booking_id: id })
+    body: JSON.stringify({ booking_id: id, csrf_token: '<?=csrfToken()?>' })
   })
   .then(res => res.json())
   .then(data => {
@@ -206,38 +164,6 @@ function cancelBooking(id) {
   });
 }
 
-function openReviewModal(bId, vId, vName) {
-  document.getElementById('reviewBookingId').value = bId;
-  document.getElementById('reviewVenueId').value = vId;
-  document.getElementById('reviewModalVenueName').textContent = 'Rate ' + vName;
-  document.getElementById('reviewModal').classList.add('show');
-}
-
-function closeReviewModal() {
-  document.getElementById('reviewModal').classList.remove('show');
-}
-
-document.getElementById('reviewForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  const bId = document.getElementById('reviewBookingId').value;
-  const vId = document.getElementById('reviewVenueId').value;
-  const rating = document.querySelector('input[name="rating"]:checked').value;
-  const text = document.getElementById('reviewText').value;
-
-  fetch('../api/reviews.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ booking_id: bId, venue_id: vId, rating: rating, review_text: text })
-  })
-  .then(res => res.json())
-  .then(data => {
-    alert(data.message);
-    if (data.status === 'success') {
-      closeReviewModal();
-      location.reload();
-    }
-  });
-});
 </script>
 </body>
 </html>

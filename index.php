@@ -1,17 +1,65 @@
 <?php
+require_once __DIR__ . '/api/db.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $isPlayer = !empty($_SESSION['player_id']);
 $isOwner  = !empty($_SESSION['owner_id']);
 $isAdmin  = !empty($_SESSION['superadmin_id']);
+
+$cms = [];
+$heroSlides = [];
+$eventSlides = [];
+try {
+    $db = getDB();
+    syncPromotionStatuses();
+    foreach ($db->query("SELECT * FROM cms_content WHERE page_slug='home' AND is_published=1 ORDER BY sort_order,id")->fetchAll() as $item) {
+        $cms[$item['section_key']] = $item;
+        if ($item['content_type'] === 'hero') {
+            $item['hero_source'] = 'cms';
+            $heroSlides[] = $item;
+        }
+    }
+    $eventSlides = $db->query("SELECT e.id event_promotion_id,e.tenant_id,e.title,e.short_description,e.event_date,e.discount_label,e.cta_text,b.image_url,b.sort_order,v.name venue_name,v.slug,c.code coupon_code
+        FROM event_promotions e JOIN promotion_hero_banners b ON b.event_promotion_id=e.id AND b.is_published=1
+        JOIN venues v ON v.id=e.venue_id LEFT JOIN coupons c ON c.event_promotion_id=e.id AND c.status='active'
+        WHERE e.status='active' AND e.promotion_starts_at<=NOW() AND e.promotion_expires_at>=NOW()
+        ORDER BY b.sort_order,e.approved_at DESC")->fetchAll();
+    foreach ($eventSlides as $event) {
+        $heroSlides[] = [
+            'title'=>$event['title'], 'subtitle'=>$event['discount_label'] ?: ('Event at '.$event['venue_name']),
+            'content_text'=>$event['short_description'], 'image_url'=>$event['image_url'],
+            'button_text'=>$event['cta_text'] ?: 'View Venue',
+            'button_url'=>'venue.php?slug='.rawurlencode($event['slug']).'&event='.(int)$event['event_promotion_id'].($event['coupon_code']?'&coupon='.rawurlencode($event['coupon_code']):''),
+            'event_promotion_id'=>$event['event_promotion_id'], 'event_date'=>$event['event_date'],
+            'venue_name'=>$event['venue_name'], 'coupon_code'=>$event['coupon_code'],
+            'sort_order'=>(int)$event['sort_order'],'hero_source'=>'event'
+        ];
+        $track=$db->prepare("INSERT INTO promotion_analytics (tenant_id,promotion_type,promotion_id,event_type,event_date,metadata_json) VALUES (?,'event_promotion',?,'impression',CURDATE(),?)");
+        $track->execute([(int)$event['tenant_id'],(int)$event['event_promotion_id'],json_encode(['surface'=>'homepage_hero'])]);
+    }
+    usort($heroSlides, fn(array $a,array $b): int => ((int)($a['sort_order']??0) <=> (int)($b['sort_order']??0)) ?: strcmp(($a['hero_source']??'cms').'-'.($a['id']??$a['event_promotion_id']??0),($b['hero_source']??'cms').'-'.($b['id']??$b['event_promotion_id']??0)));
+} catch (Throwable $e) { /* Keep public homepage available with safe defaults. */ }
+function cmsValue(array $cms, string $key, string $field, string $fallback): string {
+    $value = trim((string)($cms[$key][$field] ?? ''));
+    return $value !== '' ? $value : $fallback;
+}
+if (!$heroSlides) {
+    $heroSlides[] = ['title'=>'Find & book sports grounds in Nepal','subtitle'=>'Your next game starts here.','content_text'=>'Discover trusted venues, compare live slots, and book in minutes.','image_url'=>'','button_text'=>'Find a ground','button_url'=>'#services'];
+}
+$fallbackHeroImages = [
+    'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1600&q=85',
+    'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1600&q=85',
+    'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1600&q=85',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?= htmlspecialchars(csrfToken(), ENT_QUOTES) ?>">
   <title>MeroMaidan - Nepal's Smart Sports Venue Booking Platform</title>
   <meta name="description" content="MeroMaidan makes sports simple — players, teams & academies instantly connect with top sports venues across Nepal.">
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/style.css?v=20260810-recommended1">
 </head>
 <body>
 
@@ -19,7 +67,7 @@ $isAdmin  = !empty($_SESSION['superadmin_id']);
   <!-- Header Navigation -->
   <header class="site-header">
     <div class="header-left">
-      <a href="#" class="logo-wrap">
+      <a href="index.php" class="logo-wrap" aria-label="MeroMaidan home">
         <svg class="logo-badge-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="100" height="100" rx="28" fill="#1BB955"/>
           <path d="M25 20H55C68 20 75 27 75 37C75 44 70 50 62 52C72 55 78 62 78 72C78 83 69 90 53 90H25V20Z" fill="#1BB955"/>
@@ -31,13 +79,16 @@ $isAdmin  = !empty($_SESSION['superadmin_id']);
       </a>
 
       <!-- Desktop Nav Bar -->
-      <nav class="desktop-nav">
-        <a href="#services">Services</a>
+      <nav class="desktop-nav" id="siteNav" aria-label="Primary navigation">
+        <a href="#services">Find Venues</a>
         <a href="#how-it-works">How It Works</a>
-        <a href="#about">About Us</a>
-        <a href="#story">Our Story</a>
-        <a href="#why-choose-us">Why Choose Us</a>
-        <a href="#testimonials">Reviews</a>
+        <a href="about.php">About Us</a>
+        <div class="mobile-nav-account">
+          <?php if($isPlayer): ?><a href="player/index.php">My dashboard</a><a href="auth/logout.php">Sign out</a>
+          <?php elseif($isOwner): ?><a href="owner/index.php">Owner panel</a><a href="auth/logout.php">Sign out</a>
+          <?php elseif($isAdmin): ?><a href="superadmin/index.php">Admin panel</a><a href="auth/logout.php">Sign out</a>
+          <?php else: ?><a href="auth/login.php">Player login</a><a href="auth/register.php">Create account</a><a href="list-ground.php">List your venue</a><?php endif; ?>
+        </div>
       </nav>
     </div>
 
@@ -56,510 +107,112 @@ $isAdmin  = !empty($_SESSION['superadmin_id']);
         <a href="auth/register.php" class="list-ground-btn" style="background:#1BB955;color:#fff;margin-right:8px;">Sign Up</a>
         <a href="list-ground.php" class="list-ground-btn" style="background:#0f2740;">🏟️ List Ground</a>
       <?php endif; ?>
-      <button class="nav-toggle-btn" aria-label="Menu">☰</button>
+      <button class="nav-toggle-btn" id="navToggleBtn" type="button" aria-label="Open menu" aria-controls="siteNav" aria-expanded="false">☰</button>
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <section class="hero-section">
-    <div class="hero-container">
-      <div class="hero-left">
-        <h1 class="hero-title">Find & book sports grounds in Nepal · football, futsal, cricket & more</h1>
-        <p class="hero-sub">MeroMaidan makes sports simple — players, teams & academies instantly connect with top venues.</p>
-        <div class="hero-dots">
-          <div class="hero-dot"></div>
-          <div class="hero-dot"></div>
-          <div class="hero-dot"></div>
-          <div class="hero-dot"></div>
-          <div class="hero-dot active"></div>
+  <!-- CMS-powered Hero Carousel -->
+  <section class="hero-carousel" id="heroCarousel" aria-roledescription="carousel" aria-label="MeroMaidan highlights" tabindex="0">
+    <div class="hero-track" id="heroTrack">
+      <?php foreach($heroSlides as $index => $slide):
+        $image = trim((string)($slide['image_url'] ?? ''));
+        if (!preg_match('~^https?://[^\s"\'()]+$~', $image)) $image = $fallbackHeroImages[$index % count($fallbackHeroImages)];
+      ?>
+      <article class="hero-slide<?=$index===0?' active':''?>" style="--hero-image:url('<?=htmlspecialchars($image,ENT_QUOTES)?>')" aria-hidden="<?=$index===0?'false':'true'?>"<?php if(!empty($slide['event_promotion_id'])):?> data-event-promotion="<?=intval($slide['event_promotion_id'])?>"<?php endif;?>>
+        <div class="hero-slide-inner">
+          <div class="hero-copy">
+            <div class="hero-eyebrow"><span></span> <?=!empty($slide['event_promotion_id'])?'Promoted event · '.htmlspecialchars($slide['venue_name']):'Nepal’s smart sports venue platform'?></div>
+            <h1 class="hero-title"><?=htmlspecialchars($slide['title'])?></h1>
+            <p class="hero-sub"><?=htmlspecialchars((string)$slide['content_text'])?></p>
+            <?php if(!empty($slide['event_date'])||!empty($slide['coupon_code'])):?><div class="event-hero-meta"><?php if(!empty($slide['event_date'])):?><span>📅 <?=date('d M Y',strtotime($slide['event_date']))?></span><?php endif;?><?php if(!empty($slide['coupon_code'])):?><span>Coupon: <strong><?=htmlspecialchars($slide['coupon_code'])?></strong></span><?php endif;?></div><?php endif;?>
+            <div class="hero-actions">
+              <a class="hero-primary-btn" href="<?=htmlspecialchars($slide['button_url'] ?: '#services')?>"><?=htmlspecialchars($slide['button_text'] ?: 'Explore venues')?> <span>→</span></a>
+              <a class="hero-secondary-btn" href="#how-it-works">See how it works</a>
+            </div>
+            <div class="hero-trust-row"><span>✓ Verified venues</span><span>✓ Live slots</span><span>✓ Instant confirmation</span></div>
+          </div>
+          <aside class="hero-highlight-card">
+            <div class="hero-highlight-icon">✦</div><div><small>WHY MEROMAIDAN</small><p><?=htmlspecialchars($slide['subtitle'] ?: 'Find, compare, and book with confidence.')?></p></div>
+          </aside>
         </div>
-      </div>
-      <div class="hero-right">
-        <div class="hero-highlight-card">
-          “Find and book sports grounds near you in minutes. Football, futsal, cricket, and cricsal venues across Nepal—all in one place.”
-        </div>
-      </div>
+      </article>
+      <?php endforeach; ?>
     </div>
+    <?php if(count($heroSlides)>1): ?>
+    <button class="hero-arrow hero-prev" type="button" aria-label="Previous slide">←</button>
+    <button class="hero-arrow hero-next" type="button" aria-label="Next slide">→</button>
+    <div class="hero-controls" role="tablist" aria-label="Choose hero slide">
+      <?php foreach($heroSlides as $index=>$slide): ?><button class="hero-dot<?=$index===0?' active':''?>" type="button" role="tab" aria-label="Show slide <?=$index+1?>" aria-selected="<?=$index===0?'true':'false'?>" data-slide="<?=$index?>"><span></span></button><?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+    <div class="sr-only" id="heroStatus" aria-live="polite">Slide 1 of <?=count($heroSlides)?></div>
   </section>
 
-  <!-- Services & Ground Listings -->
-  <section class="section-pad" id="services">
-    <h2 class="section-title">Our <span>services</span></h2>
-    
-    <!-- Search + Near Me Bar -->
-    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
-      <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #e2e8f0;border-radius:50px;padding:10px 18px;">
-        <span>🔍</span>
-        <input type="text" id="searchInput" placeholder="Search venues by name, area..." style="border:none;outline:none;font-family:inherit;font-size:14px;font-weight:600;color:#2b3648;background:none;flex:1;">
-      </div>
-      <button id="nearMeBtn" style="display:flex;align-items:center;gap:8px;padding:12px 22px;background:#0f2740;color:#fff;border:none;border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;transition:all .2s;font-family:inherit;">
-        📍 Near Me
-      </button>
-      <button id="mapToggleBtn" onclick="toggleMapModal()" style="display:flex;align-items:center;gap:8px;padding:12px 22px;background:#f97316;color:#fff;border:none;border-radius:50px;font-size:14px;font-weight:800;cursor:pointer;transition:all .2s;font-family:inherit;">
-        🗺️ Map View
-      </button>
+  <!-- Venue Discovery -->
+  <section class="discovery-section" id="services">
+    <div class="section-heading-row"><div><div class="section-kicker">Discover venues</div><h2 class="section-title">Find the right ground for <span>your game.</span></h2><p class="section-lead">Search verified venues, compare rates, and see what is available near you.</p></div><div class="live-data-badge"><span></span> Live marketplace</div></div>
+    <div class="discovery-panel">
+      <div class="discovery-search"><span>⌕</span><input type="search" id="searchInput" placeholder="Search venue, area, or city…" aria-label="Search venues"></div>
+      <button id="nearMeBtn" class="discovery-action secondary" type="button">📍 Near me</button>
+      <button id="mapToggleBtn" class="discovery-action primary" type="button">🗺️ Map view</button>
     </div>
-
-    <!-- Leaflet Map Modal -->
-    <div id="mapModal" style="display:none;background:white;border-radius:16px;border:2px solid #e2e8f0;padding:20px;margin-bottom:24px;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="font-size:16px;font-weight:800;color:#0f2740;">🗺️ Interactive Venue Location Map (Nepal)</h3>
-        <button onclick="toggleMapModal()" style="background:#e2e8f0;border:none;padding:6px 12px;border-radius:20px;cursor:pointer;font-weight:700;">✕ Close Map</button>
-      </div>
-      <div id="leafletMap" style="height:380px;width:100%;border-radius:12px;background:#e2e8f0;"></div>
+    <div class="filter-panel">
+      <div class="filter-group"><div class="filter-label">Sport</div><div class="sports-grid" id="sportsGrid"><button class="sport-pill active" data-sport="all">All sports</button><button class="sport-pill" data-sport="Football">⚽ Football</button><button class="sport-pill" data-sport="Futsal">🏟️ Futsal</button><button class="sport-pill" data-sport="Cricket">🏏 Cricket</button><button class="sport-pill" data-sport="Cricsal">🎯 Cricsal</button></div></div>
+      <div class="filter-divider"></div>
+      <div class="filter-group"><div class="filter-label">Location</div><div class="region-grid" id="regionGrid"><button class="region-pill active" data-region="all">All Nepal</button><button class="region-pill" data-region="Kathmandu">Kathmandu</button><button class="region-pill" data-region="Lalitpur">Lalitpur</button><button class="region-pill" data-region="Bhaktapur">Bhaktapur</button><button class="region-pill" data-region="Pokhara">Pokhara</button><button class="region-pill" data-region="Chitwan">Chitwan</button></div></div>
     </div>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-      let map = null;
-      function toggleMapModal() {
-        const m = document.getElementById('mapModal');
-        if (m.style.display === 'none') {
-          m.style.display = 'block';
-          if (!map) {
-            map = L.map('leafletMap').setView([27.7036, 85.3199], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
-            // Add venue markers
-            const pins = [
-              { name: 'Royal Futsal', lat: 27.7036, lng: 85.3199, price: '1,500', slug: 'royal-futsal' },
-              { name: 'Green Field Football', lat: 27.6679, lng: 85.3169, price: '2,500', slug: 'green-field-football' },
-              { name: 'Kathmandu Futsal Center', lat: 27.6929, lng: 85.3385, price: '800', slug: 'kathmandu-futsal-center' }
-            ];
-            pins.forEach(p => {
-              L.marker([p.lat, p.lng]).addTo(map)
-               .bindPopup(`<b>${p.name}</b><br>NPR ${p.price}/hr<br><a href="venue.php?slug=${p.slug}" style="color:#f97316;font-weight:700;">Book Now 📅</a>`);
-            });
-          }
-        } else {
-          m.style.display = 'none';
-        }
-      }
-    </script>
-
-    <div class="service-heading">
-      1. Sports Ground Booking ⚽
-    </div>
-
-    <div class="filter-controls-wrap">
-      <!-- Sport Filters -->
-      <div class="sports-grid" id="sportsGrid">
-        <button class="sport-pill active" data-sport="all">🌐 All Sports</button>
-        <button class="sport-pill" data-sport="Football">⚽ Football</button>
-        <button class="sport-pill" data-sport="Futsal">🏟️ Futsal</button>
-        <button class="sport-pill" data-sport="Cricket">🏏 Cricket</button>
-        <button class="sport-pill" data-sport="Cricsal">🏏 Cricsal</button>
-      </div>
-
-      <!-- Select Region Box -->
-      <div class="region-card">
-        <div class="region-title">Select Region:</div>
-        <div class="region-grid" id="regionGrid">
-          <button class="region-pill active" data-region="all">🌐 All Regions</button>
-          <button class="region-pill" data-region="Kathmandu">📍 Kathmandu</button>
-          <button class="region-pill" data-region="Lalitpur">📍 Lalitpur</button>
-          <button class="region-pill" data-region="Bhaktapur">📍 Bhaktapur</button>
-          <button class="region-pill" data-region="Pokhara">📍 Pokhara</button>
-          <button class="region-pill" data-region="Chitwan">📍 Chitwan</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="results-count-text" id="resultsCountText">Found 37 grounds in all regions</div>
-
-    <!-- Ground Grid Container -->
-    <div class="grounds-container" id="groundsGrid">
-      <!-- Cards rendered dynamically via app.js -->
-    </div>
-
-    <!-- Feature Services (2-7) -->
-    <div class="services-grid-wrap">
-      <div class="feature-service-card">
-        <div class="service-icon-box">🤝</div>
-        <h4>2. Wide Partner Network</h4>
-        <p>Partnered with top academies & grounds across Nepal.</p>
-      </div>
-
-      <div class="feature-service-card">
-        <div class="service-icon-box">📍</div>
-        <h4>3. Location-Based Search</h4>
-        <p>Quickly find grounds near home, work, or training spots.</p>
-      </div>
-
-      <div class="feature-service-card">
-        <div class="service-icon-box">⚡</div>
-        <h4>4. Instant Booking & Confirmation</h4>
-        <p>Secure & fast — no calls, confirmation in seconds.</p>
-      </div>
-
-      <div class="feature-service-card">
-        <div class="service-icon-box">⚽</div>
-        <h4>5. Booking for Teams, Events & Training</h4>
-        <div class="tag-list">
-          <span class="tag-item">friendly matches</span>
-          <span class="tag-item">team practice</span>
-          <span class="tag-item">coaching / academy</span>
-        </div>
-      </div>
-
-      <div class="feature-service-card">
-        <div class="service-icon-box">🏢</div>
-        <h4>6. Support for ground owners</h4>
-        <p>List your facility, increase visibility.</p>
-      </div>
-
-      <div class="feature-service-card">
-        <div class="service-icon-box">🎧</div>
-        <h4>7. Customer support</h4>
-        <p>We're here to help with bookings & questions.</p>
-      </div>
-    </div>
+    <div class="map-panel" id="mapModal" hidden><div class="map-panel-head"><div><strong>Explore on the map</strong><span>Showing venues from your current filters</span></div><button id="mapCloseBtn" type="button" aria-label="Close map">✕</button></div><div id="leafletMap"></div></div>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <div class="results-toolbar"><div class="results-count-text" id="resultsCountText">Loading venues…</div><span>Verified listings only</span></div>
+    <div class="grounds-container" id="groundsGrid"><div class="marketplace-loading">Loading available venues…</div></div>
   </section>
 
   <!-- How It Works Section -->
-  <section class="section-pad how-it-works-bg" id="how-it-works">
-    <h2 class="section-title" style="text-align: center;">How It <span>Works</span></h2>
-    
-    <div class="steps-grid">
-      <!-- Step 1 -->
-      <div class="step-card">
-        <div class="step-num-badge">1</div>
-        <div class="step-icon-wrap">🔍</div>
-        <h3 class="step-title">Search</h3>
-        <p class="step-desc">Find your perfect ground by location, sport, and availability</p>
-        <ul class="step-check-list">
-          <li>200+ venues</li>
-          <li>Real-time availability</li>
-          <li>Filter by sport</li>
-        </ul>
-      </div>
-
-      <!-- Step 2 -->
-      <div class="step-card">
-        <div class="step-num-badge">2</div>
-        <div class="step-icon-wrap">📅</div>
-        <h3 class="step-title">Pick</h3>
-        <p class="step-desc">Select your date, time, and duration that works best for you</p>
-        <ul class="step-check-list">
-          <li>Flexible timing</li>
-          <li>1-6 hour slots</li>
-          <li>Instant pricing</li>
-        </ul>
-      </div>
-
-      <!-- Step 3 -->
-      <div class="step-card">
-        <div class="step-num-badge">3</div>
-        <div class="step-icon-wrap">🧡</div>
-        <h3 class="step-title">Confirm</h3>
-        <p class="step-desc">Book instantly and get confirmation within 30 minutes</p>
-        <ul class="step-check-list">
-          <li>20% off first booking</li>
-          <li>Secure payment</li>
-          <li>24/7 support</li>
-        </ul>
-      </div>
-    </div>
-
-    <!-- Callout Box -->
-    <div class="callout-box">
-      <h3 class="callout-title">Ready to play?</h3>
-      <p class="callout-sub">MeroMaidan · instant booking · 200+ venues</p>
-      <a href="#groundsGrid" class="btn-orange">Find a ground 📅</a>
-    </div>
-  </section>
-
-  <!-- About Section -->
-  <section class="about-section" id="about">
-    <div class="about-grid">
-      <div class="about-left">
-        <h2 class="about-title">About <span>MeroMaidan</span></h2>
-        <div class="about-sub">Your Ultimate Sports Ground Booking Platform in Nepal</div>
-        <p class="about-desc">We're on a mission to make sports accessible to everyone by providing a seamless platform to discover and book the best sports grounds across Nepal.</p>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon">📍</div>
-          <div class="stat-num">50+</div>
-          <div class="stat-label">Sports Grounds</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon">⚽</div>
-          <div class="stat-num">4</div>
-          <div class="stat-label">Sports Categories</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon">🙂</div>
-          <div class="stat-num">5000+</div>
-          <div class="stat-label">Happy Customers</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon">🎧</div>
-          <div class="stat-num">24/7</div>
-          <div class="stat-label">Booking Support</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Our Story -->
-  <section class="story-section" id="story">
-    <div class="story-grid">
-      <div class="story-left">
-        <h2 class="section-title" style="margin-bottom: 20px;">Our <span>Story</span></h2>
-        <p class="story-text">Founded in 2024, MeroMaidan was born from a simple idea: making sports ground booking as easy as ordering food online.</p>
-        <p class="story-text">What started as a small initiative has now grown into Nepal's most trusted sports ground booking platform, connecting thousands of sports enthusiasts with the best facilities across the country.</p>
-
-        <div class="mission-card">
-          <div class="mission-icon">🎯</div>
-          <h3 class="mission-title">Our Mission</h3>
-          <p class="mission-desc">To create a healthier, more active community by making sports facilities accessible to everyone.</p>
-        </div>
-
-        <div class="mission-card">
-          <div class="mission-icon">👁️</div>
-          <h3 class="mission-title">Our Vision</h3>
-          <p class="mission-desc">To be the #1 sports ground booking platform in Nepal.</p>
-        </div>
-      </div>
-
-      <div class="photo-grid">
-        <img src="https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=600&q=80" alt="Football">
-        <img src="https://images.unsplash.com/photo-1519861531473-9200262188bf?auto=format&fit=crop&w=600&q=80" alt="Basketball">
-        <img src="https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=600&q=80" alt="Tennis">
-        <img src="https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=600&q=80" alt="Volleyball">
-      </div>
-    </div>
-  </section>
-
-  <!-- Why Choose Us -->
-  <section class="section-pad" id="why-choose-us" style="text-align: center;">
-    <h2 class="section-title">Why Choose <span>Us?</span></h2>
-    <p style="font-size: 13px; color: #64748b; margin-top: 6px; margin-bottom: 24px;">Experience the best sports ground booking service in Nepal</p>
-
-    <div class="why-grid">
-      <div class="why-card">
-        <div class="why-icon-wrap">📅</div>
-        <h3 class="why-title">Easy Booking</h3>
-        <p class="why-desc">Book your favorite sports ground in just a few clicks with our simple and fast booking process.</p>
-      </div>
-
-      <div class="why-card">
-        <div class="why-icon-wrap">⏰</div>
-        <h3 class="why-title">24/7 Availability</h3>
-        <p class="why-desc">Book anytime, anywhere with our round-the-clock booking system. Never miss a game!</p>
-      </div>
-
-      <div class="why-card">
-        <div class="why-icon-wrap">🏷️</div>
-        <h3 class="why-title">Best Prices</h3>
-        <p class="why-desc">Get the best rates and exclusive deals on all sports grounds across Nepal.</p>
-      </div>
-
-      <div class="why-card">
-        <div class="why-icon-wrap">🛡️</div>
-        <h3 class="why-title">Secure Payment</h3>
-        <p class="why-desc">Your transactions are 100% secure with our encrypted payment gateway.</p>
-      </div>
-
-      <div class="why-card">
-        <div class="why-icon-wrap">⭐</div>
-        <h3 class="why-title">Premium Grounds</h3>
-        <p class="why-desc">Access to the best maintained and equipped sports facilities in Nepal.</p>
-      </div>
-
-      <div class="why-card">
-        <div class="why-icon-wrap">🎧</div>
-        <h3 class="why-title">Dedicated Support</h3>
-        <p class="why-desc">Our customer support team is ready to assist you with any queries.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Testimonials Section -->
-  <section class="section-pad" id="testimonials" style="background: #f8fafc; border-radius: 32px;">
-    <div style="text-align: center; margin-bottom: 32px;">
-      <h2 class="section-title">What Our <span>Customers Say</span></h2>
-      <p style="font-size: 13px; color: #64748b; margin-top: 6px;">Join thousands of satisfied sports enthusiasts</p>
-    </div>
-
-    <div class="testimonials-grid">
-      <div class="testimonial-card">
-        <div class="user-profile">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80" class="user-avatar" alt="Ahmed">
-          <div>
-            <div class="user-name">Ahmed Khan</div>
-            <div class="user-role">Football Enthusiast</div>
-          </div>
-        </div>
-        <div class="stars">★★★★★</div>
-        <p class="review-text">“MeroMaidan has transformed how we book football matches. The process is seamless and the grounds are always top-notch!”</p>
-      </div>
-
-      <div class="testimonial-card">
-        <div class="user-profile">
-          <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" class="user-avatar" alt="Sarah">
-          <div>
-            <div class="user-name">Sarah Williams</div>
-            <div class="user-role">Tennis Player</div>
-          </div>
-        </div>
-        <div class="stars">★★★★★</div>
-        <p class="review-text">“I love how easy it is to find and book tennis courts. The location filters save us so much time!”</p>
-      </div>
-
-      <div class="testimonial-card">
-        <div class="user-profile">
-          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80" class="user-avatar" alt="Mohammed">
-          <div>
-            <div class="user-name">Mohammed Al Ali</div>
-            <div class="user-role">Cricket Captain</div>
-          </div>
-        </div>
-        <div class="stars">★★★★★</div>
-        <p class="review-text">“Our team uses MeroMaidan exclusively for all our cricket matches. Great prices and excellent ground quality!”</p>
-      </div>
+  <section class="process-section" id="how-it-works">
+    <div class="centered-heading"><div class="section-kicker">Simple by design</div><h2 class="section-title">From search to kickoff in <span>three steps.</span></h2><p class="section-lead">No phone calls, confusing price lists, or uncertain availability.</p></div>
+    <div class="process-grid">
+      <article class="process-card"><div class="process-top"><span class="process-number">01</span><div class="process-icon">⌕</div></div><h3>Discover</h3><p>Filter trusted venues by sport, location, price, and distance.</p></article>
+      <article class="process-card highlighted"><div class="process-top"><span class="process-number">02</span><div class="process-icon">▣</div></div><h3>Choose a slot</h3><p>Open a venue, select an available date and time, and see the price upfront.</p></article>
+      <article class="process-card"><div class="process-top"><span class="process-number">03</span><div class="process-icon">✓</div></div><h3>Book with confidence</h3><p>Confirm your details and receive a booking reference immediately.</p></article>
     </div>
   </section>
 
   <!-- Ready to Play Section -->
-  <section class="section-pad" style="background: #0f2740; border-radius: 32px; margin: 32px 0; text-align: center; color: #ffffff;">
-    <h2 style="font-size: 32px; font-weight: 800; margin-bottom: 12px;">Ready to Play?</h2>
-    <p style="font-size: 14px; opacity: 0.85; margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto;">Join thousands of sports enthusiasts who trust MeroMaidan for their game bookings</p>
-    
-    <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
-      <a href="#groundsGrid" class="btn-orange" style="min-width: 220px; justify-content: center;">📙 Book a Ground Now</a>
-      <a href="tel:0527132921" class="btn-orange" style="min-width: 220px; justify-content: center; background: rgba(255,255,255,0.15);">📞 Contact Us</a>
-    </div>
-
-    <div style="font-size: 12px; opacity: 0.8; margin-top: 24px; display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;">
-      <span>✓ 100% Secure</span>
-      <span>✓ Instant Confirmation</span>
-      <span>✓ 24/7 Support</span>
-    </div>
+  <section class="final-cta">
+    <div class="cta-orb one"></div><div class="cta-orb two"></div><div class="final-cta-content"><div class="section-kicker light">Your game is waiting</div><h2><?=htmlspecialchars(cmsValue($cms,'cta_section','title','Ready to Play?'))?></h2><p><?=htmlspecialchars(cmsValue($cms,'cta_section','content_text','Find the right venue and reserve your next game today.'))?></p><div class="final-cta-actions"><a href="<?=htmlspecialchars(cmsValue($cms,'cta_section','button_url','#groundsGrid'))?>" class="cta-main"><?=htmlspecialchars(cmsValue($cms,'cta_section','button_text','Find a Ground'))?> →</a><a href="list-ground.php" class="cta-alt">Own a venue? Partner with us</a></div></div>
   </section>
 
   <!-- Site Footer -->
   <footer class="site-footer">
     <div class="footer-grid">
       <div>
-        <div class="footer-brand">MEROMAIDAN</div>
+        <div class="footer-brand">Mero<span>Maidan</span></div>
         <p class="footer-sub">We make sports simple and accessible by helping players, teams, and academies easily find and book sports grounds across Nepal.</p>
-        <div class="social-links">
-          <a href="#" class="social-icon">f</a>
-          <a href="#" class="social-icon">t</a>
-          <a href="#" class="social-icon">ig</a>
-          <a href="#" class="social-icon">in</a>
-          <a href="#" class="social-icon">yt</a>
-        </div>
       </div>
 
       <div>
         <div class="footer-sec-title">Quick Links</div>
         <ul class="footer-links-list">
-          <li><a href="#about">❯ About Us</a></li>
-          <li><a href="#how-it-works">❯ How It Works</a></li>
-          <li><a href="#services">❯ Popular Grounds</a></li>
-          <li><a href="admin/index.php">❯ Become a Partner</a></li>
-          <li><a href="#why-choose-us">❯ FAQ</a></li>
+          <li><a href="#services">Find venues</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="about.php">About Us</a></li>
         </ul>
       </div>
 
       <div>
-        <div class="footer-sec-title">Contact Us</div>
-        <ul class="contact-info-list">
-          <li>📍 Kathmandu, Nepal</li>
-          <li>📞 9800000000</li>
-          <li>✉️ support@meromaidan.com</li>
-          <li>⏰ Sun-Sat: 12AM-11PM</li>
-        </ul>
+        <div class="footer-sec-title">For venue owners</div><ul class="footer-links-list"><li><a href="list-ground.php">List your venue</a></li><li><a href="auth/owner-login.php">Owner portal</a></li><li><a href="auth/admin-login.php">Administration</a></li></ul>
       </div>
 
       <div>
-        <div class="footer-sec-title">Newsletter</div>
-        <p style="font-size: 13px; opacity: 0.8; margin-bottom: 14px;">Subscribe for updates & offers!</p>
-        <div class="newsletter-box">
-          <input type="email" placeholder="Your email" class="newsletter-input">
-          <button class="newsletter-btn">✈️ Subscribe</button>
-        </div>
+        <div class="footer-sec-title">Get started</div><p class="footer-sub">Create a player account to save venues and manage all your bookings in one place.</p><a href="auth/register.php" class="footer-account-link">Create an account →</a>
       </div>
     </div>
 
     <div class="footer-bottom">
-      <p>© 2024 MeroMaidan. Made with ❤️ in Nepal</p>
-      <div style="margin-top: 10px; display: flex; justify-content: center; gap: 16px;">
-        <a href="#" style="color: rgba(255,255,255,0.7); text-decoration: none;">Privacy</a>
-        <a href="#" style="color: rgba(255,255,255,0.7); text-decoration: none;">Terms</a>
-        <a href="#" style="color: rgba(255,255,255,0.7); text-decoration: none;">Sitemap</a>
-      </div>
+      <p>© <?=date('Y')?> MeroMaidan · Built for Nepal’s sports community.</p>
     </div>
   </footer>
 
-  <!-- Floating Buttons -->
-  <div class="floating-action-bar">
-    <a href="tel:9800000000" class="floating-btn floating-call" aria-label="Call">📞</a>
-    <a href="https://wa.me/9779800000000" class="floating-btn floating-wa" aria-label="WhatsApp">💬</a>
-  </div>
 </div>
 
-<!-- Booking Modal -->
-<div class="modal-overlay" id="bookingModal">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3 class="modal-title">Book Ground Slot</h3>
-      <button class="modal-close" id="modalCloseBtn">✕</button>
-    </div>
-    
-    <p style="font-size: 14px; font-weight: 700; color: #f9631c; margin-bottom: 20px;" id="modalGroundName">All Sports Ground</p>
-    
-    <form id="bookingForm">
-      <input type="hidden" id="modalGroundId" value="">
-      
-      <div class="form-group">
-        <label class="form-label" for="custName">Your Name</label>
-        <input type="text" id="custName" class="form-input" placeholder="e.g. Tariq Al Mansoori" required>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="custPhone">Phone Number</label>
-        <input type="tel" id="custPhone" class="form-input" placeholder="e.g. 0527132921" required>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="bookDate">Booking Date</label>
-        <input type="date" id="bookDate" class="form-input" value="2026-08-01" required>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="bookSlot">Time Slot</label>
-        <select id="bookSlot" class="form-select" required>
-          <option value="05:00 PM - 06:00 PM">05:00 PM - 06:00 PM</option>
-          <option value="06:00 PM - 07:00 PM">06:00 PM - 07:00 PM</option>
-          <option value="07:00 PM - 08:00 PM">07:00 PM - 08:00 PM</option>
-          <option value="08:00 PM - 09:00 PM">08:00 PM - 09:00 PM</option>
-          <option value="09:00 PM - 10:00 PM">09:00 PM - 10:00 PM</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="payMethod">Payment Method</label>
-        <select id="payMethod" class="form-select" required>
-          <option value="Credit Card">Credit / Debit Card</option>
-          <option value="Apple Pay">Apple Pay</option>
-          <option value="Cash at Venue">Pay at Venue</option>
-        </select>
-      </div>
-
-      <button type="submit" class="btn-orange" style="width: 100%; justify-content: center; margin-top: 12px;">
-        Confirm Booking 📅
-      </button>
-    </form>
-  </div>
-</div>
-
-<!-- Toast Notification -->
-<div class="toast" id="toastNotification"></div>
-
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=20260810-recommended2"></script>
 </body>
 </html>

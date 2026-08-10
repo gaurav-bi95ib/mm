@@ -55,7 +55,10 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
       <a href="owners.php" class="nav-link"><span class="icon">👤</span> Owners</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="applications.php" class="nav-link"><span class="icon">📋</span> Applications <?php if($appsCount>0): ?><span class="badge orange"><?=$appsCount?></span><?php endif; ?></a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
 
       <div class="nav-section-label">System Governance</div>
       <a href="audit.php" class="nav-link"><span class="icon">🛡️</span> Audit Logs</a>

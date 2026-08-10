@@ -13,26 +13,38 @@ $myVenues = $stmt->fetchAll();
 $selectedVenueId = (int)($_GET['venue_id'] ?? ($myVenues[0]['id'] ?? 0));
 $selectedVenue = null;
 foreach($myVenues as $v){ if($v['id']==$selectedVenueId){ $selectedVenue=$v; break; } }
+if (!$selectedVenue && !empty($myVenues)) {
+    $selectedVenue = $myVenues[0];
+    $selectedVenueId = (int)$selectedVenue['id'];
+}
 
 $msg = '';
 // Handle add/toggle slot
 if($_SERVER['REQUEST_METHOD']==='POST'){
+    if(!verifyCsrfToken($_POST['csrf_token']??'')){http_response_code(403);die('Your session expired.');}
     $action = $_POST['action'] ?? '';
     if($action==='add_slot' && $selectedVenueId){
-        for($day=0;$day<=6;$day++){
-            if(isset($_POST['day_'.$day])){
-                $stmt = $db->prepare("INSERT INTO venue_slots (venue_id, day_of_week, start_time, end_time, price, is_available) VALUES (:vid,:day,:start,:end,:price,1)");
-                $stmt->execute([':vid'=>$selectedVenueId,':day'=>$day,':start'=>$_POST['start_time'],':end'=>$_POST['end_time'],':price'=>$_POST['price']]);
+        $start=$_POST['start_time']??'';$end=$_POST['end_time']??'';$price=(float)($_POST['price']??0);
+        if(!$selectedVenue||!$start||!$end||$start>=$end||$price<=0){$msg='Enter a valid time range and positive price.';}
+        else{
+            for($day=0;$day<=6;$day++){
+                if(isset($_POST['day_'.$day])){
+                    $duplicate=$db->prepare("SELECT COUNT(*) FROM venue_slots WHERE venue_id=? AND day_of_week=? AND start_time=?");$duplicate->execute([$selectedVenueId,$day,$start]);
+                    if((int)$duplicate->fetchColumn()===0){
+                        $stmt = $db->prepare("INSERT INTO venue_slots (venue_id, day_of_week, start_time, end_time, price, is_available) VALUES (:vid,:day,:start,:end,:price,1)");
+                        $stmt->execute([':vid'=>$selectedVenueId,':day'=>$day,':start'=>$start,':end'=>$end,':price'=>$price]);
+                    }
+                }
             }
+            $msg = '✅ Slot schedule saved successfully!';
         }
-        $msg = '✅ Slot added successfully!';
     }
     if($action==='toggle_slot' && isset($_POST['slot_id'])){
-        $db->prepare("UPDATE venue_slots SET is_available = 1 - is_available WHERE id=:id")->execute([':id'=>$_POST['slot_id']]);
-        $msg = '✅ Slot toggled!';
+        $db->prepare("UPDATE venue_slots SET is_available = 1 - is_available WHERE id=:id AND venue_id=:vid")->execute([':id'=>(int)$_POST['slot_id'],':vid'=>$selectedVenueId]);
+        $msg = '✅ Slot availability updated!';
     }
     if($action==='delete_slot' && isset($_POST['slot_id'])){
-        $db->prepare("DELETE FROM venue_slots WHERE id=:id")->execute([':id'=>$_POST['slot_id']]);
+        $db->prepare("DELETE FROM venue_slots WHERE id=:id AND venue_id=:vid")->execute([':id'=>(int)$_POST['slot_id'],':vid'=>$selectedVenueId]);
         $msg = '✅ Slot deleted!';
     }
     header("Location: slots.php?venue_id=$selectedVenueId&msg=".urlencode($msg)); exit;
@@ -66,6 +78,7 @@ $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturd
       <a href="venue.php" class="nav-link"><span class="icon">🏟️</span> My Venue</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="slots.php" class="nav-link active"><span class="icon">⏰</span> Manage Slots</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
     </nav>
@@ -108,7 +121,7 @@ $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturd
       </div>
       <?php else: ?>
 
-      <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">
+      <div class="admin-split" style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">
 
         <!-- Slots By Day -->
         <div>
@@ -129,11 +142,13 @@ $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturd
                 <td><span class="badge <?=$s['is_available']?'active':'suspended'?>"><?=$s['is_available']?'Available':'Blocked'?></span></td>
                 <td>
                   <form method="POST" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
                     <input type="hidden" name="action" value="toggle_slot">
                     <input type="hidden" name="slot_id" value="<?=$s['id']?>">
                     <button type="submit" class="btn btn-ghost btn-sm"><?=$s['is_available']?'⏸ Block':'▶ Enable'?></button>
                   </form>
                   <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this slot?')">
+                    <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
                     <input type="hidden" name="action" value="delete_slot">
                     <input type="hidden" name="slot_id" value="<?=$s['id']?>">
                     <button type="submit" class="btn btn-red btn-sm">🗑</button>
@@ -154,6 +169,7 @@ $dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturd
         <div class="data-card" style="position:sticky;top:80px;">
           <div class="data-card-header"><h3>➕ Add New Slot</h3></div>
           <form method="POST" style="padding:20px;">
+            <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
             <input type="hidden" name="action" value="add_slot">
             <div class="form-group">
               <label class="form-label">Start Time</label>

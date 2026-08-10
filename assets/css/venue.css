@@ -264,18 +264,6 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); colo
   align-items: center;
   gap: 6px;
 }
-.rating-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255,255,255,.1);
-}
-.star-score { font-size: 22px; font-weight: 900; color: #facc15; }
-.star-icons { color: #facc15; font-size: 14px; }
-.reviews-count { font-size: 12px; color: rgba(255,255,255,.6); }
-
 /* ─── EXPERIENCE CHIPS ─── */
 .experience-section { margin-top: 24px; }
 .section-label {
@@ -541,6 +529,7 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); colo
 }
 .booking-summary-row:last-of-type { border-bottom: none; }
 .booking-summary-row .val { font-weight: 700; color: var(--navy); }
+.booking-summary-row.price-row{padding:9px 0;background:#f8fafc}.booking-summary-row.price-row>span:first-child{padding-left:9px}.booking-summary-row.price-row .val{padding-right:9px}.booking-summary-row.discount-row{color:#14823e;background:#effaf3}.booking-summary-row.discount-row .val{color:#159447;font-weight:900}
 .booking-total {
   font-size: 20px;
   font-weight: 900;
@@ -606,6 +595,7 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); colo
 .pay-method-btn:hover { border-color: var(--green); }
 .pay-method-btn.selected { border-color: var(--green); background: rgba(27,185,85,.08); color: var(--green); }
 
+/* ─── SUCCESS TOAST ─── */
 /* ─── SUCCESS TOAST ─── */
 .success-overlay {
   display: none;
@@ -673,3 +663,22 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); colo
   padding: 20px;
   font-size: 12px;
 }
+.coupon-box{margin:15px 0;padding:14px;border:1px solid #dce7ed;border-radius:14px;background:#f8fafc}.coupon-input-row{display:grid;grid-template-columns:1fr auto;gap:7px}.coupon-input-row button{padding:0 14px;border:0;border-radius:10px;background:#0f2740;color:#fff;font-size:11px;font-weight:900;cursor:pointer}.coupon-box>p{margin-top:7px;color:#718497;font-size:9px}.coupon-box>p.success{color:#118642;font-weight:800}.coupon-box>p.error{color:#c2410c;font-weight:800}.price-breakdown{margin:13px 0;padding:12px;border:1px solid #e4ebf0;border-radius:12px;background:#fff}.price-breakdown>div{display:flex;justify-content:space-between;padding:6px 0;color:#6b7e91;font-size:10px}.price-breakdown strong{color:#263f55}.price-breakdown .discount strong{color:#159447}
+
+/* ─── PROFESSIONAL VENUE PAGE REFRESH ─── */
+body{background:linear-gradient(180deg,#f7fafc 0,#f2f6f8 100%);color:#24384b}
+.venue-header{height:74px;padding:0 clamp(18px,4vw,58px);box-shadow:none;border-bottom:1px solid #e5ecf1}
+.venue-header .logo-badge-svg{width:40px;height:40px}.venue-header .logo-text{font-size:20px;letter-spacing:-.03em}
+.venue-header nav{gap:8px}.venue-header nav a{padding:9px 13px;border-radius:10px;font-size:12px;font-weight:800}.venue-header nav a:hover,.venue-header nav a.active{background:#ecfdf3;color:#138943}
+.btn-login,.btn-signup{border-radius:11px;padding:10px 17px;font-size:12px}.breadcrumb-bar{padding:12px clamp(18px,4vw,58px);background:#fff;color:#8191a1}.breadcrumb-bar .current{color:#30465a}
+.venue-wrapper{max-width:1320px;padding:38px 28px 90px}.venue-hero-info{align-items:center;margin-bottom:24px}.venue-title-block h1{font-size:clamp(31px,4vw,48px);letter-spacing:-.045em;line-height:1.08}.venue-location-tag{margin-top:10px;font-size:13px}.venue-sport-badge{margin-top:12px;padding:6px 11px;background:#e9f9ef;color:#118642;font-size:9px;font-weight:900;letter-spacing:.09em}.venue-action-row{gap:9px}.btn-share{width:46px;height:46px;border:1px solid #dbe5eb;border-radius:13px;color:#0f2740;font-size:20px;box-shadow:0 6px 18px rgba(15,39,64,.05)}.btn-book-now{min-height:46px;padding:0 21px;border-radius:13px;font-size:12px;box-shadow:0 10px 25px rgba(27,185,85,.22)}
+.venue-content-grid{grid-template-columns:minmax(0,1fr) 370px;gap:28px}.venue-content-grid>div:first-child{min-width:0}.venue-hero-img{aspect-ratio:16/8.4;border-radius:25px;box-shadow:0 18px 45px rgba(15,39,64,.13)}.venue-hero-img:after{content:"";position:absolute;inset:45% 0 0;background:linear-gradient(transparent,rgba(7,24,41,.67));pointer-events:none}.venue-hours-bar{z-index:2;padding:25px 22px 18px}.hour-chip{padding:8px 13px;background:rgba(7,27,46,.55);border-color:rgba(255,255,255,.22);font-size:11px}
+.experience-section,.avail-section,.date-section,.slots-section,.gallery-section,.amenities-section{margin-top:28px!important}.section-label{margin:0 0 12px;font-size:10px;font-weight:900;letter-spacing:.1em}.experience-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.exp-chip{min-width:0;min-height:88px;justify-content:center;padding:12px;border:1px solid #e1e9ef;border-radius:15px;box-shadow:0 5px 18px rgba(15,39,64,.035)}.exp-chip .icon{font-size:21px}.exp-chip .label{font-size:10px;font-weight:800}.avail-buttons{gap:10px}.btn-avail{min-height:48px;padding:0 18px;border-radius:13px;font-size:11px}.btn-avail.secondary{border-width:1px}
+.section-title-main{margin:0;color:#0f2740;font-size:22px;letter-spacing:-.025em}.calendar-wrapper{margin-top:14px;padding:25px;border:1px solid #e1e9ef;border-radius:22px;box-shadow:0 10px 35px rgba(15,39,64,.055)}.cal-header{margin-bottom:20px}.cal-nav{width:38px;height:38px;border-width:1px;border-radius:11px;background:#f6f9fb}.cal-grid{gap:7px}.cal-day-name{font-size:9px;letter-spacing:.07em}.cal-day{min-height:44px;border-radius:11px}.slots-section>.section-title-main{margin-bottom:14px}.slots-grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:9px}.slot-chip{padding:13px 11px;border-width:1px;border-radius:13px;box-shadow:0 4px 14px rgba(15,39,64,.03)}.slots-loading{border:1px dashed #cfdae2;border-radius:18px;background:#fff}
+.booking-note{margin-top:18px;padding:16px 18px;border-color:#d9e7ef;border-radius:16px;background:#eef7fb;color:#3e566b;line-height:1.6}.booking-note .icon{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:#0f2740;color:#fff;font-size:13px;font-weight:900}.booking-note strong{color:#0f2740}
+.gallery-section>.section-title-main{margin-bottom:14px}.gallery-grid{gap:12px}.gallery-grid img{border-radius:16px;box-shadow:0 8px 20px rgba(15,39,64,.08)}
+.content-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:17px}.content-section-head p{margin-top:5px;color:#74879a;font-size:12px}.content-kicker{display:block;margin-bottom:6px;color:#149347;font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.facility-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #d9e6ed;border-radius:50px;background:#fff;color:#64788c;font-size:9px;font-weight:800;white-space:nowrap}.facility-status i{width:7px;height:7px;border-radius:50%;background:#1bb955;box-shadow:0 0 0 4px rgba(27,185,85,.12)}
+.amenities-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.amenity-card{display:flex;align-items:center;gap:12px;min-height:82px;padding:14px 15px;border:1px solid #dfe8ee;border-radius:17px;background:#fff;box-shadow:0 7px 23px rgba(15,39,64,.045);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.amenity-card:hover{transform:translateY(-2px);border-color:#b9dfc7;box-shadow:0 13px 28px rgba(15,39,64,.08)}.amenity-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:13px;background:#eafaf0;color:#118642;font-size:18px}.amenity-copy{display:flex;flex-direction:column;min-width:0}.amenity-copy strong{color:#19344d;font-size:12px}.amenity-copy small{margin-top:3px;color:#8494a4;font-size:9px}.amenity-check{display:grid;place-items:center;flex:0 0 23px;width:23px;height:23px;margin-left:auto;border-radius:50%;background:#eafaf0;color:#118642;font-size:10px;font-weight:900}.amenities-empty{grid-column:1/-1;display:grid;justify-items:center;gap:4px;padding:35px;border:1px dashed #cbd8e1;border-radius:18px;background:#fff;color:#718497;text-align:center}.amenities-empty>span{font-size:27px;color:#1bb955}.amenities-empty strong{color:#263e53;font-size:13px}.amenities-empty small{font-size:10px}
+.rates-card{padding:25px;border-radius:23px;background:radial-gradient(circle at 90% 4%,rgba(27,185,85,.27),transparent 31%),linear-gradient(145deg,#091e33,#123755);box-shadow:0 20px 46px rgba(15,39,64,.18)}.rates-card-title{margin-bottom:18px;font-size:13px;text-transform:uppercase;letter-spacing:.06em}.rates-card-title span{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:#1bb955;color:#fff;font-size:12px}.rate-item{padding:17px 18px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.07)}.rate-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em}.rate-value{font-size:30px}.rates-contact-box{margin-top:16px;padding:15px;border-radius:14px;background:rgba(255,255,255,.065)}.rates-contact-box .phone-link{font-size:13px}.booking-confirm-panel{top:90px;margin-top:18px!important;padding:24px;border:1px solid #dfe7ed;border-radius:22px;box-shadow:0 14px 38px rgba(15,39,64,.085)}.booking-confirm-panel h3{font-size:18px;letter-spacing:-.02em}.booking-summary-row{padding:10px 0}.booking-total{margin-top:5px;padding:15px 0;border-top:1px solid #e5ebef}.form-input{min-height:46px;border-width:1px;border-radius:12px;background:#f7f9fb}.payment-methods{gap:9px}.pay-method-btn{padding:11px;border-width:1px;border-radius:12px}.btn-confirm-booking{min-height:49px;border-radius:13px;font-size:13px}.venue-footer{padding:27px;background:#081b2f}
+@media(max-width:900px){.venue-header nav{display:none}.venue-content-grid{grid-template-columns:1fr}.booking-confirm-panel{position:static;top:auto}.rates-card{margin-top:8px}.venue-wrapper{padding-bottom:60px}}
+@media(max-width:600px){html,body{max-width:100%;overflow-x:hidden}.venue-header{height:66px;padding:0 14px}.header-actions{gap:6px}.btn-login{display:none}.btn-signup{padding:9px 12px;font-size:10px}.breadcrumb-bar{padding:10px 15px}.venue-wrapper{width:100%;padding:24px 13px 55px}.venue-hero-info{align-items:flex-start}.venue-title-block h1{font-size:32px}.venue-action-row{width:100%}.btn-book-now{flex:1;justify-content:center}.venue-hero-img{aspect-ratio:4/3;border-radius:20px}.venue-hours-bar{gap:7px;padding:20px 11px 12px}.hour-chip{padding:7px 9px;font-size:9px}.experience-chips{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}.content-section-head{align-items:flex-start;flex-direction:column;gap:10px}.amenities-grid{grid-template-columns:1fr}.calendar-wrapper{padding:16px 10px}.cal-grid{gap:2px}.cal-day{min-height:38px;padding:6px 2px}.slots-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery-grid{grid-template-columns:1fr 1fr}}

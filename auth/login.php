@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../api/db.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-$role  = $_GET['role'] ?? 'player';
+$role  = defined('LOGIN_ROLE') ? LOGIN_ROLE : 'player';
 $error = '';
 
 // Already logged in?
@@ -14,39 +14,46 @@ if (!empty($_SESSION['owner_id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Your session expired. Refresh the page and try again.';
+    }
     $email = trim($_POST['email'] ?? '');
     $pass  = $_POST['password'] ?? '';
-    $role  = $_POST['role'] ?? 'player';
+    // Each login route has one fixed account type; ignore forged role fields.
+    $role  = defined('LOGIN_ROLE') ? LOGIN_ROLE : 'player';
     $db    = getDB();
 
-    if ($role === 'admin') {
+    if (!$error && $role === 'admin') {
         $stmt = $db->prepare("SELECT * FROM superadmins WHERE email = :email LIMIT 1");
         $stmt->execute([':email' => $email]);
         $user = $stmt->fetch();
         if ($user && password_verify($pass, $user['password_hash'])) {
+            session_regenerate_id(true);
             $_SESSION['superadmin_id']   = $user['id'];
             $_SESSION['superadmin_name'] = $user['name'];
             logAudit('login', 'IAM', 'superadmin', $user['id'], "SuperAdmin logged in");
             header('Location: ' . APP_URL . '/superadmin/index.php');
             exit;
         }
-    } elseif ($role === 'owner') {
+    } elseif (!$error && $role === 'owner') {
         $stmt = $db->prepare("SELECT * FROM venue_owners WHERE email = :email AND status = 'active' LIMIT 1");
         $stmt->execute([':email' => $email]);
         $user = $stmt->fetch();
         if ($user && password_verify($pass, $user['password_hash'])) {
+            session_regenerate_id(true);
             $_SESSION['owner_id']   = $user['id'];
             $_SESSION['owner_name'] = $user['name'];
             logAudit('login', 'IAM', 'owner', $user['id'], "Owner logged in");
             header('Location: ' . APP_URL . '/owner/index.php');
             exit;
         }
-    } else {
+    } elseif (!$error) {
         // Player role
         $stmt = $db->prepare("SELECT * FROM players WHERE email = :email AND status = 'active' LIMIT 1");
         $stmt->execute([':email' => $email]);
         $user = $stmt->fetch();
         if ($user && password_verify($pass, $user['password_hash'])) {
+            session_regenerate_id(true);
             $_SESSION['player_id']   = $user['id'];
             $_SESSION['player_name'] = $user['name'];
             $_SESSION['player_email']= $user['email'];
@@ -55,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
-    $error = 'Invalid credentials or inactive account. Please try again.';
+    if (!$error) $error = 'Invalid credentials or inactive account. Please try again.';
 }
 ?>
 <!DOCTYPE html>
@@ -181,12 +188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="logo-sub">Nepal's Smart Sports Venue Platform</div>
   </div>
 
-  <div class="auth-tabs">
-    <a href="?role=player" class="auth-tab <?= $role==='player' ? 'active' : '' ?>">⚽ Player</a>
-    <a href="?role=owner" class="auth-tab <?= $role==='owner' ? 'active' : '' ?>">🏟️ Owner</a>
-    <a href="?role=admin" class="auth-tab <?= $role==='admin' ? 'active' : '' ?>">🛡️ Admin</a>
-  </div>
-
   <?php if ($role === 'admin'): ?>
     <div class="auth-title">Admin Login</div>
     <p class="auth-sub">Sign in to the MeroMaidan control panel</p>
@@ -203,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php endif; ?>
 
   <form method="POST">
-    <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrfToken(), ENT_QUOTES) ?>">
     <div class="form-group">
       <label class="form-label">Email Address</label>
       <input type="email" name="email" class="form-input" placeholder="you@example.com" required autofocus>
@@ -224,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       🔒 Admin@1234
     <?php elseif ($role === 'owner'): ?>
       📧 ramesh@royalfutsal.com<br>
-      🔒 Owner@1234
+      🔒 Admin@1234
     <?php else: ?>
       📧 anil@example.com<br>
       🔒 Admin@1234

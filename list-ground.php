@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/api/db.php'; if(session_status()===PHP_SESSION_NONE) session_start(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>List Your Ground - MeroMaidan</title>
   <meta name="description" content="List your sports ground on MeroMaidan and start getting bookings instantly.">
+  <meta name="csrf-token" content="<?=csrfToken()?>">
   <link rel="stylesheet" href="assets/css/venue.css">
   <style>
     body { background: #f5f7fa; }
@@ -158,7 +160,7 @@
     .amenity-check.checked { border-color: #1BB955; background: rgba(27,185,85,.06); }
 
     /* Plan Cards */
-    .plan-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .plan-cards { display: grid; grid-template-columns: 1fr; gap: 14px; max-width: 680px; margin: 0 auto; }
     @media (max-width: 600px) { .plan-cards { grid-template-columns: 1fr; } }
     .plan-card {
       border: 2.5px solid #e2e8f0;
@@ -258,11 +260,11 @@
   <nav>
     <a href="index.php">Home</a>
     <a href="index.php#services">Venues</a>
-    <a href="index.php#about">About</a>
+    <a href="about.php">About</a>
   </nav>
   <div class="header-actions">
-    <a href="auth/login.php" class="btn-login">Log In</a>
-    <a href="list-ground.php" class="btn-signup" style="background:#f9631c;">Sign Up Free</a>
+    <a href="auth/owner-login.php" class="btn-login">Venue Owner Login</a>
+    <a href="#step1" class="btn-signup" style="background:#f9631c;">Apply to List</a>
   </div>
 </header>
 
@@ -272,10 +274,10 @@
   <h1>List Your <span>Ground</span> on MeroMaidan</h1>
   <p>Join Nepal's fastest growing sports venue platform. Get more bookings, manage your ground effortlessly, and grow your business.</p>
   <div class="plan-badges">
-    <span class="plan-badge">✅ Free to List</span>
+    <span class="plan-badge">✅ One Clear Annual Plan</span>
     <span class="plan-badge">📅 Instant Bookings</span>
     <span class="plan-badge">📊 Analytics Dashboard</span>
-    <span class="plan-badge">🛡️ <strong>Premium</strong> Plans Available</span>
+    <span class="plan-badge">💳 <strong>NPR 9,999</strong> / Year</span>
   </div>
 </div>
 
@@ -479,49 +481,27 @@
 
     <div class="step-nav">
       <button class="btn-prev" onclick="prevStep(4)">← Back</button>
-      <button class="btn-next" onclick="nextStep(4)">Next → Choose Plan</button>
+      <button class="btn-next" onclick="nextStep(4)">Next → Subscription</button>
     </div>
   </div>
 
   <!-- ─── STEP 5: Choose Plan ─── -->
   <div class="step-card" id="step5">
     <div class="step-icon-title">⭐</div>
-    <h2>Choose Your Plan</h2>
-    <p class="step-sub">Select a subscription plan that fits your needs. Upgrade anytime.</p>
+    <h2>Annual Venue Subscription</h2>
+    <p class="step-sub">One standard subscription for one venue. Optional promotions are purchased separately.</p>
 
     <div class="plan-cards">
-      <div class="plan-card selected" data-plan="free">
-        <div class="plan-name">🆓 Free</div>
-        <div class="plan-price">NPR <sup></sup>0<sub>/mo</sub></div>
+      <div class="plan-card selected" data-plan="annual-venue">
+        <div class="popular-badge">ONE STANDARD PLAN</div>
+        <div class="plan-name">🏟️ Annual Venue Subscription</div>
+        <div class="plan-price">NPR 9,999<sub>/year</sub></div>
         <ul class="plan-features">
-          <li>1 Venue listing</li>
-          <li>30 bookings/month</li>
-          <li>Basic analytics</li>
-          <li>Email support</li>
-        </ul>
-      </div>
-      <div class="plan-card popular" data-plan="standard">
-        <div class="popular-badge">⚡ Most Popular</div>
-        <div class="plan-name">🥈 Standard</div>
-        <div class="plan-price">NPR <sup></sup>1,499<sub>/mo</sub></div>
-        <ul class="plan-features">
-          <li>3 Venue listings</li>
-          <li>200 bookings/month</li>
-          <li>Priority listing</li>
-          <li>Analytics dashboard</li>
-          <li>WhatsApp alerts</li>
-        </ul>
-      </div>
-      <div class="plan-card" data-plan="premium">
-        <div class="plan-name">👑 Premium</div>
-        <div class="plan-price">NPR <sup></sup>3,999<sub>/mo</sub></div>
-        <ul class="plan-features">
-          <li>Unlimited venues</li>
-          <li>Unlimited bookings</li>
-          <li>Top placement</li>
-          <li>Advanced analytics</li>
-          <li>Dedicated support</li>
-          <li>Custom branding</li>
+          <li>List and manage one venue</li>
+          <li>Grounds/courts, photos and facilities</li>
+          <li>Pricing, operating hours and booking slots</li>
+          <li>Bookings, staff, field operations and reports</li>
+          <li>Recommended Venue and Event Promotion remain optional paid add-ons</li>
         </ul>
       </div>
     </div>
@@ -557,7 +537,7 @@
 let currentStep = 1;
 const totalSteps = 5;
 let selectedSport = 'Futsal';
-let selectedPlan  = 'free';
+let selectedPlan  = 'annual-venue';
 let selectedAmenities = [];
 
 const amenityList = [
@@ -691,6 +671,7 @@ async function submitApplication() {
   btn.innerHTML = '⏳ Submitting...';
 
   const payload = {
+    csrf_token:      document.querySelector('meta[name="csrf-token"]')?.content || '',
     owner_name:     document.getElementById('ownerName').value,
     business_name:  document.getElementById('businessName').value,
     email:          document.getElementById('ownerEmail').value,

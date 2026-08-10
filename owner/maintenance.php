@@ -16,14 +16,28 @@ $venueIds = array_column($myVenues, 'id');
 
 // Handle creating maintenance block
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
+    $action = $_POST['action'] ?? 'create';
+    if ($action === 'delete') {
+        $delId = (int)($_POST['block_id'] ?? 0);
+        $delete = $db->prepare("DELETE mb FROM maintenance_blocks mb JOIN venues v ON v.id=mb.venue_id WHERE mb.id=? AND v.owner_id=?");
+        $delete->execute([$delId,$ownerId]);
+        if ($delete->rowCount()) logAudit('delete_maintenance_block', 'Availability', 'maintenance_block', $delId, "Removed maintenance block #$delId");
+        header('Location: maintenance.php');
+        exit;
+    }
     $venueId   = (int)($_POST['venue_id'] ?? 0);
     $blockDate = $_POST['block_date'] ?? '';
     $startTime = $_POST['start_time'] ?? '';
     $endTime   = $_POST['end_time'] ?? '';
     $reason    = trim($_POST['reason'] ?? '');
 
-    if (!$venueId || !$blockDate || !$startTime || !$endTime) {
+    if (!in_array($venueId, array_map('intval', $venueIds), true)) {
+        $error = 'Choose one of your venues.';
+    } elseif (!$blockDate || !$startTime || !$endTime) {
         $error = 'Please select a venue, block date, and time range.';
+    } elseif ($startTime >= $endTime) {
+        $error = 'End time must be later than start time.';
     } else {
         $stmt = $db->prepare("
             INSERT INTO maintenance_blocks (venue_id, block_date, start_time, end_time, reason, created_by_owner)
@@ -33,15 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logAudit('create_maintenance_block', 'Availability', 'maintenance_block', $db->lastInsertId(), "Blocked venue #$venueId on $blockDate ($startTime - $endTime)");
         $msg = '🚧 Maintenance block added! Slot reservations will be prevented for this period.';
     }
-}
-
-// Handle deleting maintenance block
-if (isset($_GET['delete'])) {
-    $delId = (int)$_GET['delete'];
-    $db->prepare("DELETE FROM maintenance_blocks WHERE id = :id")->execute([':id' => $delId]);
-    logAudit('delete_maintenance_block', 'Availability', 'maintenance_block', $delId, "Removed maintenance block #$delId");
-    header('Location: maintenance.php');
-    exit;
 }
 
 // Fetch maintenance blocks
@@ -85,7 +90,7 @@ if (!empty($venueIds)) {
       <a href="field_ops.php" class="nav-link"><span class="icon">📋</span> Field Ops & Check-in</a>
       <a href="slots.php" class="nav-link"><span class="icon">⏰</span> Manage Slots</a>
       <a href="maintenance.php" class="nav-link active"><span class="icon">🚧</span> Maintenance Blocks</a>
-      <a href="promotions.php" class="nav-link"><span class="icon">🎟️</span> Promotions & Coupons</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <a href="customers.php" class="nav-link"><span class="icon">👥</span> Customers (CRM)</a>
       <a href="reports.php" class="nav-link"><span class="icon">📈</span> Reports & Analytics</a>
       <a href="settings.php" class="nav-link"><span class="icon">⚙️</span> Business Settings</a>
@@ -118,7 +123,7 @@ if (!empty($venueIds)) {
       <?php if ($msg): ?><div class="alert success" style="background:#f0fdf4;color:#16a34a;padding:12px;border-radius:8px;margin-bottom:16px;font-weight:700;"><?= $msg ?></div><?php endif; ?>
       <?php if ($error): ?><div class="alert error" style="background:#fef2f2;color:#dc2626;padding:12px;border-radius:8px;margin-bottom:16px;font-weight:700;"><?= $error ?></div><?php endif; ?>
 
-      <div style="display:grid;grid-template-columns:360px 1fr;gap:24px;">
+      <div class="admin-split" style="display:grid;grid-template-columns:360px 1fr;gap:24px;">
 
         <!-- Block Slot Form -->
         <div class="data-card">
@@ -126,6 +131,8 @@ if (!empty($venueIds)) {
             <h3>🚧 Add Maintenance Block</h3>
           </div>
           <form method="POST" style="padding:20px;">
+            <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
+            <input type="hidden" name="action" value="create">
             <div class="form-group" style="margin-bottom:14px;">
               <label style="display:block;font-size:12px;font-weight:800;color:#64748b;margin-bottom:4px;">Venue</label>
               <select name="venue_id" class="form-input" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
@@ -183,7 +190,7 @@ if (!empty($venueIds)) {
                   <td><span class="badge orange"><?= substr($b['start_time'], 0, 5) ?> – <?= substr($b['end_time'], 0, 5) ?></span></td>
                   <td><?= htmlspecialchars($b['reason'] ?: 'Pitch Maintenance') ?></td>
                   <td>
-                    <a href="?delete=<?= $b['id'] ?>" class="btn btn-red btn-sm" onclick="return confirm('Remove this block?')">✕ Remove</a>
+                    <form method="post" onsubmit="return confirm('Remove this block?')"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="block_id" value="<?=$b['id']?>"><button class="btn btn-red btn-sm">✕ Remove</button></form>
                   </td>
                 </tr>
               <?php endforeach; ?>

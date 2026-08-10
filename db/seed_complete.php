@@ -23,6 +23,9 @@ try {
       name VARCHAR(100) NOT NULL,
       slug VARCHAR(50) NOT NULL UNIQUE,
       price_monthly DECIMAL(10,2) NOT NULL DEFAULT 0,
+      price_yearly DECIMAL(10,2) NOT NULL DEFAULT 9999,
+      duration_months INT NOT NULL DEFAULT 12,
+      included_venues INT NOT NULL DEFAULT 1,
       max_venues INT NOT NULL DEFAULT 1,
       max_bookings_per_month INT NOT NULL DEFAULT 50,
       features JSON,
@@ -65,9 +68,6 @@ try {
       price_per_hour DECIMAL(10,2) NOT NULL DEFAULT 1000,
       capacity VARCHAR(50) DEFAULT '5-a-side',
       status ENUM('pending','active','suspended') DEFAULT 'pending',
-      featured TINYINT(1) DEFAULT 0,
-      rating DECIMAL(3,2) DEFAULT 0.00,
-      total_reviews INT DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (owner_id) REFERENCES venue_owners(id) ON DELETE SET NULL
     );");
@@ -161,43 +161,6 @@ try {
       FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
     );");
 
-    echo "Creating reviews...\n";
-    $pdo->exec("CREATE TABLE reviews (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      venue_id INT NOT NULL,
-      player_id INT NOT NULL,
-      booking_id INT NOT NULL,
-      rating TINYINT NOT NULL DEFAULT 5,
-      review_text TEXT,
-      status ENUM('approved','pending','hidden') DEFAULT 'approved',
-      owner_reply TEXT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY unique_review (booking_id),
-      FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE,
-      FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE,
-      FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
-    );");
-
-    echo "Creating promotions...\n";
-    $pdo->exec("CREATE TABLE promotions (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      owner_id INT NOT NULL,
-      venue_id INT NULL,
-      title VARCHAR(200) NOT NULL,
-      code VARCHAR(50) UNIQUE,
-      type ENUM('percentage','fixed','first_booking') DEFAULT 'percentage',
-      value DECIMAL(10,2) NOT NULL,
-      min_amount DECIMAL(10,2) DEFAULT 0,
-      max_uses INT DEFAULT NULL,
-      uses_count INT DEFAULT 0,
-      valid_from DATE NOT NULL,
-      valid_to DATE NOT NULL,
-      is_active TINYINT(1) DEFAULT 1,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (owner_id) REFERENCES venue_owners(id) ON DELETE CASCADE,
-      FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE SET NULL
-    );");
-
     echo "Creating audit_logs...\n";
     $pdo->exec("CREATE TABLE audit_logs (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -235,7 +198,7 @@ try {
       tenant_id INT NULL,
       title VARCHAR(255) NOT NULL,
       message TEXT NOT NULL,
-      type ENUM('booking','payment','system','maintenance','review') DEFAULT 'booking',
+      type ENUM('booking','payment','system','maintenance') DEFAULT 'booking',
       is_read TINYINT(1) DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );");
@@ -300,19 +263,25 @@ try {
       id INT AUTO_INCREMENT PRIMARY KEY,
       page_slug VARCHAR(100) NOT NULL,
       section_key VARCHAR(100) NOT NULL UNIQUE,
+      content_type VARCHAR(40) NOT NULL DEFAULT 'general',
       title VARCHAR(255) NOT NULL,
+      subtitle VARCHAR(500),
       content_text TEXT,
+      image_url VARCHAR(1000),
+      button_text VARCHAR(100),
+      button_url VARCHAR(500),
+      is_published TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     );");
 
     // 3. Insert Base Data
     $commonPassword = password_hash('Admin@1234', PASSWORD_BCRYPT);
 
-    echo "Seeding subscription plans...\n";
-    $pdo->exec("INSERT INTO subscription_plans (name, slug, price_monthly, max_venues, max_bookings_per_month, features) VALUES
-    ('Free', 'free', 0, 1, 30, '[\"Basic listing\",\"1 venue\",\"Email support\"]'),
-    ('Standard', 'standard', 1499, 3, 200, '[\"3 venues\",\"Priority listing\",\"Analytics\",\"WhatsApp alerts\"]'),
-    ('Premium', 'premium', 3999, 999, 9999, '[\"Unlimited venues\",\"Top placement\",\"Advanced analytics\",\"Dedicated support\",\"Custom branding\"]');");
+    echo "Seeding the annual venue subscription...\n";
+    $pdo->exec("INSERT INTO subscription_plans (id,name,slug,price_monthly,price_yearly,duration_months,included_venues,max_venues,max_bookings_per_month,features) VALUES
+    (1,'Annual Venue Subscription','annual-venue',0,9999,12,1,1,9999,'[\"Manage one venue\",\"Grounds and courts\",\"Photos and facilities\",\"Operating hours and slots\",\"Bookings\",\"Staff operations\",\"Reports\"]');");
 
     echo "Seeding superadmins...\n";
     $pdo->exec("INSERT INTO superadmins (name, email, password_hash) VALUES
@@ -320,15 +289,15 @@ try {
 
     echo "Seeding venue owners...\n";
     $pdo->exec("INSERT INTO venue_owners (id, name, email, phone, password_hash, business_name, plan_id, status, approved_at) VALUES
-    (1, 'Ramesh Shrestha', 'ramesh@royalfutsal.com', '9841234567', '$commonPassword', 'Royal Futsal Pvt Ltd', 3, 'active', NOW()),
-    (2, 'Sita Karki', 'sita@greenfield.com', '9851234567', '$commonPassword', 'Green Field Sports', 2, 'active', NOW()),
+    (1, 'Ramesh Shrestha', 'ramesh@royalfutsal.com', '9841234567', '$commonPassword', 'Royal Futsal Pvt Ltd', 1, 'active', NOW()),
+    (2, 'Sita Karki', 'sita@greenfield.com', '9851234567', '$commonPassword', 'Green Field Sports', 1, 'active', NOW()),
     (3, 'Bikash Tamang', 'bikash@kathmandufutsal.com', '9861234567', '$commonPassword', 'Kathmandu Futsal Center', 1, 'active', NOW());");
 
     echo "Seeding venues...\n";
-    $pdo->exec("INSERT INTO venues (id, owner_id, name, slug, sport_type, address, city, district, lat, lng, description, amenities, images, cover_image, open_time, close_time, price_per_hour, capacity, status, featured, rating, total_reviews) VALUES
-    (1, 1, 'Royal Futsal', 'royal-futsal', 'Futsal', 'Thapagaun, Anamnagar', 'Kathmandu', 'Kathmandu', 27.7036, 85.3199, 'Premium indoor futsal ground with world-class turf.', '[\"Changing Room\",\"Parking\",\"Drinking Water\"]', '[]', 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1200&q=80', '06:00:00', '23:00:00', 1500, '5-a-side', 'active', 1, 4.8, 1),
-    (2, 2, 'Green Field Football Ground', 'green-field-football', 'Football', 'Lagankhel, Lalitpur', 'Lalitpur', 'Lalitpur', 27.6679, 85.3169, 'Full-size professional football ground.', '[\"Parking\",\"Cafeteria\",\"Drinking Water\"]', '[]', 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80', '06:00:00', '21:00:00', 2500, '11-a-side', 'active', 1, 4.5, 1),
-    (3, 3, 'Kathmandu Futsal Center', 'kathmandu-futsal-center', 'Futsal', 'New Baneshwor, Kathmandu', 'Kathmandu', 'Kathmandu', 27.6929, 85.3385, 'Budget-friendly futsal ground.', '[\"Parking\"]', '[]', 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80', '10:00:00', '22:00:00', 800, '5-a-side', 'active', 0, 4.0, 0);");
+    $pdo->exec("INSERT INTO venues (id, owner_id, name, slug, sport_type, address, city, district, lat, lng, description, amenities, images, cover_image, open_time, close_time, price_per_hour, capacity, status) VALUES
+    (1, 1, 'Royal Futsal', 'royal-futsal', 'Futsal', 'Thapagaun, Anamnagar', 'Kathmandu', 'Kathmandu', 27.7036, 85.3199, 'Indoor futsal ground with quality turf.', '[\"Changing Room\",\"Parking\",\"Drinking Water\"]', '[]', 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1200&q=80', '06:00:00', '23:00:00', 1500, '5-a-side', 'active'),
+    (2, 2, 'Green Field Football Ground', 'green-field-football', 'Football', 'Lagankhel, Lalitpur', 'Lalitpur', 'Lalitpur', 27.6679, 85.3169, 'Full-size football ground.', '[\"Parking\",\"Cafeteria\",\"Drinking Water\"]', '[]', 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80', '06:00:00', '21:00:00', 2500, '11-a-side', 'active'),
+    (3, 3, 'Kathmandu Futsal Center', 'kathmandu-futsal-center', 'Futsal', 'New Baneshwor, Kathmandu', 'Kathmandu', 'Kathmandu', 27.6929, 85.3385, 'Affordable futsal ground.', '[\"Parking\"]', '[]', 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80', '10:00:00', '22:00:00', 800, '5-a-side', 'active');");
 
     echo "Seeding venue slots...\n";
     // Seed slots for Royal Futsal (id=1) for all days of the week
@@ -348,13 +317,8 @@ try {
     (2, 'Sunita Thapa', 'sunita@example.com', '9852222222', '$commonPassword', 'active'),
     (3, 'Rohan KC', 'rohan@example.com', '9863333333', '$commonPassword', 'active');");
 
-    echo "Seeding promotions...\n";
-    $pdo->exec("INSERT INTO promotions (owner_id, venue_id, title, code, type, value, valid_from, valid_to, is_active) VALUES
-    (1, 1, 'Kickoff Discount', 'KICKOFF', 'percentage', 10.00, '2026-01-01', '2027-12-31', 1),
-    (1, 1, 'Flat 500 Off', 'FLAT500', 'fixed', 500.00, '2026-01-01', '2027-12-31', 1);");
-
     echo "Seeding bookings...\n";
-    // 1 Past completed booking for review
+    // One past completed booking
     $pdo->exec("INSERT INTO bookings (id, venue_id, player_id, customer_name, customer_phone, customer_email, booking_date, start_time, end_time, total_price, status, payment_method, booking_ref) VALUES
     (1, 1, 1, 'Anil Maharjan', '9841111111', 'anil@example.com', '2026-08-01', '06:00:00', '07:00:00', 1500.00, 'completed', 'cash', 'MM080101');");
 
@@ -366,16 +330,12 @@ try {
     $pdo->exec("INSERT INTO bookings (id, venue_id, player_id, customer_name, customer_phone, customer_email, booking_date, start_time, end_time, total_price, status, payment_method, booking_ref) VALUES
     (3, 1, 2, 'Sunita Thapa', '9852222222', 'sunita@example.com', '" . date('Y-m-d') . "', '08:00:00', '09:00:00', 1500.00, 'confirmed', 'khalti', 'MM080803');");
 
-    echo "Seeding reviews...\n";
-    $pdo->exec("INSERT INTO reviews (venue_id, player_id, booking_id, rating, review_text, status) VALUES
-    (1, 1, 1, 5, 'World class facilities and smooth experience booking online!', 'approved');");
-
     echo "Seeding favorite venues...\n";
     $pdo->exec("INSERT INTO player_favorites (player_id, venue_id) VALUES (1, 1);");
 
     echo "Seeding pending vendor applications...\n";
     $pdo->exec("INSERT INTO owner_applications (owner_name, business_name, email, phone, sport_type, venue_name, city, plan_selected, status) VALUES
-    ('Puskar Lal', 'Balkumari Arena', 'puskar@balkumari.com', '9811223344', 'Futsal', 'Balkumari Futsal Club', 'Lalitpur', 'standard', 'new');");
+    ('Puskar Lal', 'Balkumari Arena', 'puskar@balkumari.com', '9811223344', 'Futsal', 'Balkumari Futsal Club', 'Lalitpur', 'annual-venue', 'new');");
 
     echo "Seeding maintenance blocks...\n";
     $pdo->exec("INSERT INTO maintenance_blocks (venue_id, block_date, start_time, end_time, reason, created_by_owner) VALUES
@@ -391,9 +351,12 @@ try {
     (1, 'Gopal Subedi', 'gopal@royalfutsal.com', '9841777666', '$commonPassword', 'Receptionist', 1);");
 
     echo "Seeding CMS content...\n";
-    $pdo->exec("INSERT INTO cms_content (page_slug, section_key, title, content_text) VALUES
-    ('home', 'hero_banner', 'Book Nepal\'s Top Sports Grounds Instantly', 'Discover 200+ top-rated futsal courts, football pitches, and cricket grounds in Nepal with real-time slot availability.'),
-    ('home', 'announcement_bar', 'Grand Opening Offer!', 'Get 20% OFF on your first booking using coupon code KICKOFF at checkout.');");
+    $pdo->exec("INSERT INTO cms_content (page_slug, section_key, content_type, title, subtitle, content_text, image_url, button_text, button_url, sort_order) VALUES
+    ('home', 'hero_banner', 'hero', 'Find and book sports grounds across Nepal', 'Football, futsal, cricket, and cricsal venues in one marketplace.', 'Discover futsal courts, football pitches, and cricket grounds across Nepal with live slot availability.', 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1600&q=85', 'Find a ground', '#services', 1),
+    ('home', 'hero_slide_2', 'hero', 'Your next game is one swipe away.', 'Real venues. Live availability. Instant booking.', 'Search by sport and location, compare verified grounds, and reserve the right time in a few simple taps.', 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1600&q=85', 'Explore venues', '#services', 2),
+    ('home', 'hero_slide_3', 'hero', 'More bookings. Better venue operations.', 'A smarter platform for Nepal’s sports businesses.', 'Give your ground the visibility it deserves and manage slots, customers, payments, and performance from one place.', 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1600&q=85', 'List your ground', 'list-ground.php', 3),
+    ('home', 'about_section', 'content', 'About MeroMaidan', 'Your Ultimate Sports Ground Booking Platform in Nepal', 'We\'re on a mission to make sports accessible to everyone by providing a seamless platform to discover and book the best sports grounds across Nepal.', NULL, NULL, NULL, 20),
+    ('home', 'cta_section', 'call_to_action', 'Ready to Play?', NULL, 'Join thousands of sports enthusiasts who trust MeroMaidan for their game bookings', NULL, 'Book a Ground Now', '#groundsGrid', 40); ");
 
     echo "Seeding mock eSewa transactions and invoices...\n";
     $pdo->exec("INSERT INTO mock_esewa_transactions (booking_id, transaction_code, amount, esewa_phone, status) VALUES
@@ -409,7 +372,18 @@ try {
     (1, 'owner', 1, 'New eSewa Booking', 'Anil Maharjan booked Royal Futsal for Rs. 2,500 via eSewa.', 'payment'),
     (NULL, 'superadmin', NULL, 'Platform Alert', 'New owner application submitted by Balkumari Arena.', 'system');");
 
-    echo "\n🎉 DATABASE SUCCESSFULLY SEEDED WITH COMPREHENSIVE TEST DATA!\n";
+    echo "Applying the commercial model and product cleanup migrations...\n";
+    $pdo->exec(file_get_contents(__DIR__ . '/migration_v4_business_model.sql'));
+    $pdo->exec(file_get_contents(__DIR__ . '/migration_v5_remove_feedback_legacy_promotions.sql'));
+
+    echo "Seeding the live Event Promotion demo...\n";
+    $pdo->exec("INSERT INTO event_promotions (tenant_id,owner_id,venue_id,title,short_description,event_date,promotion_starts_at,promotion_expires_at,discount_label,cta_text,amount_npr,status,approved_by,approved_at)
+        VALUES (1,1,1,'Kathmandu Futsal Week - Demo','Book Royal Futsal this week and save 15% with the event coupon.',CURDATE(),NOW(),DATE_ADD(NOW(),INTERVAL 7 DAY),'15% off with KTFUTSAL15','Book Now',2000,'active',1,NOW())");
+    $demoEventId = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO promotion_hero_banners (event_promotion_id,image_url,alt_text,is_published) VALUES (?,'uploads/promotions/demo-dashain-futsal-1600x600.png','Kathmandu Futsal Week event banner',1)")->execute([$demoEventId]);
+    $pdo->prepare("INSERT INTO coupons (tenant_id,owner_id,venue_id,event_promotion_id,code,discount_type,discount_value,minimum_booking_amount,maximum_discount_amount,usage_limit,usage_limit_per_player,valid_from,valid_to,status) VALUES (1,1,1,?,'KTFUTSAL15','percentage',15,1000,300,100,1,NOW(),DATE_ADD(NOW(),INTERVAL 7 DAY),'active')")->execute([$demoEventId]);
+    $pdo->prepare("INSERT INTO promotion_payments (tenant_id,owner_id,service_type,service_id,amount_npr,payment_method,provider_reference,status,paid_at) VALUES (1,1,'event_promotion',?,2000,'esewa','ESEWA-PROMO-DEMO','paid',NOW())")->execute([$demoEventId]);
+    echo "\nDatabase successfully seeded with comprehensive test data and a live Event Promotion demo.\n";
 
 } catch (PDOException $e) {
     die("❌ Database seeding error: " . $e->getMessage() . "\n");

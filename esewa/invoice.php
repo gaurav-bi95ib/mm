@@ -4,10 +4,11 @@ require_once __DIR__ . '/../api/db.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 $booking_id = (int)($_GET['booking_id'] ?? 0);
+$receipt_ref = trim($_GET['ref'] ?? '');
 if (!$booking_id) die("Invoice not found.");
 
 $db = getDB();
-$stmt = $db->prepare("SELECT b.*, v.name as venue_name, v.address as venue_address, v.sport_type, i.invoice_no, i.total_amount, i.net_amount, i.created_at as inv_date, tx.transaction_code, tx.esewa_phone 
+$stmt = $db->prepare("SELECT b.*, v.name as venue_name, v.address as venue_address, v.sport_type, v.owner_id, i.invoice_no, i.total_amount, i.net_amount, i.created_at as inv_date, tx.transaction_code, tx.esewa_phone
                       FROM bookings b 
                       JOIN venues v ON b.venue_id = v.id 
                       LEFT JOIN invoices i ON i.booking_id = b.id 
@@ -17,6 +18,21 @@ $stmt->execute([$booking_id]);
 $invoice = $stmt->fetch();
 
 if (!$invoice) die("Booking or invoice record missing.");
+
+$mayView = !empty($_SESSION['superadmin_id'])
+    || (!empty($_SESSION['owner_id']) && (int)$_SESSION['owner_id'] === (int)$invoice['owner_id'])
+    || (!empty($_SESSION['player_id']) && (int)$_SESSION['player_id'] === (int)$invoice['player_id'])
+    || ($receipt_ref !== '' && hash_equals((string)$invoice['booking_ref'], $receipt_ref));
+if (!$mayView) {
+    http_response_code(403);
+    die('This receipt is private. Sign in with the account that made the booking.');
+}
+
+$returnUrl = APP_URL;
+$returnLabel = 'Return to MeroMaidan';
+if (!empty($_SESSION['player_id'])) { $returnUrl = APP_URL.'/player/bookings.php'; $returnLabel = 'Return to My Bookings'; }
+elseif (!empty($_SESSION['owner_id'])) { $returnUrl = APP_URL.'/owner/bookings.php'; $returnLabel = 'Return to Owner Bookings'; }
+elseif (!empty($_SESSION['superadmin_id'])) { $returnUrl = APP_URL.'/superadmin/bookings.php'; $returnLabel = 'Return to Admin Bookings'; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -52,6 +68,14 @@ if (!$invoice) die("Booking or invoice record missing.");
       body { background: white; padding: 0; }
       .invoice-card { border: none; box-shadow: none; width: 100%; max-width: 100%; }
       .actions { display: none; }
+    }
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .invoice-card { padding: 22px 16px; }
+      .inv-header, .actions { flex-direction: column; gap: 16px; }
+      .inv-title, .info-block[style] { text-align: left !important; }
+      .grid-2 { grid-template-columns: 1fr; gap: 16px; }
+      .table { display: block; overflow-x: auto; }
     }
   </style>
 </head>
@@ -120,7 +144,7 @@ if (!$invoice) die("Booking or invoice record missing.");
 
   <div class="actions">
     <button onclick="window.print()" class="btn btn-primary">🖨️ Print / Download PDF</button>
-    <a href="<?= APP_URL ?>/player/bookings.php" class="btn btn-secondary">Return to My Bookings</a>
+    <a href="<?= htmlspecialchars($returnUrl, ENT_QUOTES) ?>" class="btn btn-secondary"><?= htmlspecialchars($returnLabel) ?></a>
   </div>
 </div>
 

@@ -5,11 +5,11 @@ $db        = getDB();
 $adminName = $_SESSION['superadmin_name'] ?? 'Admin';
 
 $filterModule = $_GET['module'] ?? 'all';
-$sql = "SELECT * FROM audit_logs";
+$sql = "SELECT * FROM audit_logs WHERE 1=1";
 $params = [];
 
 if ($filterModule !== 'all') {
-    $sql .= " WHERE module = :mod";
+    $sql .= " AND module = :mod";
     $params[':mod'] = $filterModule;
 }
 
@@ -49,7 +49,10 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
       <a href="owners.php" class="nav-link"><span class="icon">👤</span> Owners</a>
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> Bookings</a>
       <a href="applications.php" class="nav-link"><span class="icon">📋</span> Applications <?php if($appsCount>0): ?><span class="badge orange"><?=$appsCount?></span><?php endif; ?></a>
-      <a href="plans.php" class="nav-link"><span class="icon">⭐</span> Plans</a>
+      <a href="plans.php" class="nav-link"><span class="icon">💳</span> Commercial Services</a>
+      <a href="recommended-promotions.php" class="nav-link"><span class="icon">📍</span> Recommended Venue</a>
+      <a href="event-promotions.php" class="nav-link"><span class="icon">📣</span> Event Campaigns</a>
+      <a href="cms.php" class="nav-link"><span class="icon">📝</span> CMS & Content</a>
 
       <div class="nav-section-label">System Governance</div>
       <a href="audit.php" class="nav-link active"><span class="icon">🛡️</span> Audit Logs</a>
@@ -84,7 +87,6 @@ $appsCount    = $db->query("SELECT COUNT(*) FROM owner_applications WHERE status
         <a href="?module=all" class="btn btn-ghost btn-sm <?= $filterModule==='all'?'active':'' ?>">All Modules</a>
         <a href="?module=IAM" class="btn btn-ghost btn-sm <?= $filterModule==='IAM'?'active':'' ?>">IAM / Auth</a>
         <a href="?module=Booking" class="btn btn-ghost btn-sm <?= $filterModule==='Booking'?'active':'' ?>">Bookings</a>
-        <a href="?module=Reviews" class="btn btn-ghost btn-sm <?= $filterModule==='Reviews'?'active':'' ?>">Reviews</a>
         <a href="?module=Tenant" class="btn btn-ghost btn-sm <?= $filterModule==='Tenant'?'active':'' ?>">Tenant</a>
       </div>
 

@@ -10,14 +10,18 @@ $error = '';
 
 // Handle booking status updates (Check-in, Complete, No-show)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $action    = $_POST['action'] ?? '';
     $bookingId = (int)($_POST['booking_id'] ?? 0);
     $newStatus = $_POST['new_status'] ?? '';
 
     if ($bookingId && in_array($newStatus, ['checked_in', 'in_progress', 'completed', 'no_show', 'cancelled'])) {
-        $db->prepare("UPDATE bookings SET status = :st WHERE id = :id")->execute([':st' => $newStatus, ':id' => $bookingId]);
-        logAudit('update_booking_status', 'FieldOps', 'booking', $bookingId, "Field Admin updated booking #$bookingId status to $newStatus");
-        $msg = "✅ Booking status updated to " . ucfirst(str_replace('_', ' ', $newStatus));
+        $update=$db->prepare("UPDATE bookings b JOIN venues v ON v.id=b.venue_id SET b.status=:st WHERE b.id=:id AND v.owner_id=:owner");
+        $update->execute([':st'=>$newStatus,':id'=>$bookingId,':owner'=>$ownerId]);
+        if($update->rowCount()){
+            logAudit('update_booking_status', 'FieldOps', 'booking', $bookingId, "Field Admin updated booking #$bookingId status to $newStatus");
+            $msg = "✅ Booking status updated to " . ucfirst(str_replace('_', ' ', $newStatus));
+        } else $error='Booking was not found for your venue.';
     }
 }
 
@@ -82,6 +86,7 @@ if (!empty($venueIds)) {
       <a href="bookings.php" class="nav-link"><span class="icon">📅</span> All Bookings</a>
       <a href="slots.php" class="nav-link"><span class="icon">⏰</span> Manage Slots</a>
       
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Management</div>
       <a href="reports.php" class="nav-link"><span class="icon">📈</span> Reports & Analytics</a>
       <a href="settings.php" class="nav-link"><span class="icon">⚙️</span> Settings</a>
@@ -163,6 +168,7 @@ if (!empty($venueIds)) {
                 <td><span class="badge <?= $b['status'] ?>"><?= ucfirst(str_replace('_', ' ', $b['status'])) ?></span></td>
                 <td>
                   <form method="POST" style="display:inline-flex;gap:6px;flex-wrap:wrap;">
+                    <input type="hidden" name="csrf_token" value="<?=csrfToken()?>">
                     <input type="hidden" name="booking_id" value="<?= $b['id'] ?>">
 
                     <?php if (in_array($b['status'], ['confirmed', 'pending'])): ?>

@@ -32,7 +32,7 @@ if ($action === 'list') {
         $stmt = $db->prepare("SELECT * FROM notifications WHERE role = 'superadmin' ORDER BY created_at DESC LIMIT 50");
         $stmt->execute();
     } elseif ($role === 'owner') {
-        $stmt = $db->prepare("SELECT * FROM notifications WHERE (user_id = ? AND role = 'owner') OR (tenant_id = ? AND role = 'owner') ORDER BY created_at DESC LIMIT 50");
+        $stmt = $db->prepare("SELECT * FROM notifications WHERE ((user_id = ? AND role = 'owner') OR (tenant_id = ? AND role = 'owner')) ORDER BY created_at DESC LIMIT 50");
         $stmt->execute([$userId, $tenantId]);
     } else {
         $stmt = $db->prepare("SELECT * FROM notifications WHERE user_id = ? AND role = 'player' ORDER BY created_at DESC LIMIT 50");
@@ -51,10 +51,25 @@ if ($action === 'list') {
         'notifications' => $notifications
     ]);
 } elseif ($action === 'mark_read') {
-    $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        jsonResponse(['status' => 'error', 'message' => 'POST required'], 405);
+    }
+    $token = $_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if (!verifyCsrfToken($token)) {
+        jsonResponse(['status' => 'error', 'message' => 'Invalid CSRF token'], 403);
+    }
+    $id = (int)($_POST['id'] ?? 0);
     if ($id > 0) {
-        $stmt = $db->prepare("UPDATE notifications SET is_read = 1 WHERE id = ?");
-        $stmt->execute([$id]);
+        if ($role === 'superadmin') {
+            $stmt = $db->prepare("UPDATE notifications SET is_read=1 WHERE id=? AND role='superadmin'");
+            $stmt->execute([$id]);
+        } elseif ($role === 'owner') {
+            $stmt = $db->prepare("UPDATE notifications SET is_read=1 WHERE id=? AND role='owner' AND (user_id=? OR tenant_id=?)");
+            $stmt->execute([$id,$userId,$tenantId]);
+        } else {
+            $stmt = $db->prepare("UPDATE notifications SET is_read=1 WHERE id=? AND role='player' AND user_id=?");
+            $stmt->execute([$id,$userId]);
+        }
     } else {
         // Mark all read
         if ($role === 'superadmin') {

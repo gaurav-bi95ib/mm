@@ -55,6 +55,7 @@ if(!empty($venueIds)){
       <a href="venue.php" class="nav-link"><span class="icon">🏟️</span> My Venue</a>
       <a href="bookings.php" class="nav-link active"><span class="icon">📅</span> Bookings</a>
       <a href="slots.php" class="nav-link"><span class="icon">⏰</span> Manage Slots</a>
+      <?php include __DIR__ . '/_promotion_nav.php'; ?>
       <div class="nav-section-label">Account</div>
       <a href="../index.php" class="nav-link" target="_blank"><span class="icon">🌐</span> View Site</a>
       <a href="../list-ground.php" class="nav-link"><span class="icon">➕</span> Add Venue</a>

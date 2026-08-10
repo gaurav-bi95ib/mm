@@ -4,12 +4,19 @@ setCORSHeaders();
 header('Content-Type: application/json');
 
 if (session_status() === PHP_SESSION_NONE) session_start();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    jsonResponse(['status' => 'error', 'message' => 'POST required'], 405);
+}
 if (empty($_SESSION['player_id'])) {
     jsonResponse(['status' => 'error', 'message' => 'Please log in to save favorites'], 401);
 }
 
 $playerId = $_SESSION['player_id'];
 $data     = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+$csrf = $data['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+if (!verifyCsrfToken($csrf)) {
+    jsonResponse(['status' => 'error', 'message' => 'Your session expired. Refresh and try again.'], 403);
+}
 $venueId  = (int)($data['venue_id'] ?? 0);
 $action   = $data['action'] ?? 'toggle';
 

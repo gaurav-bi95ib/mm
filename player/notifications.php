@@ -7,7 +7,8 @@ $db = getDB();
 $playerId = $_SESSION['player_id'];
 
 // Handle mark read action
-if (isset($_GET['mark_all'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_all') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $db->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND role = 'player'")->execute([$playerId]);
     header("Location: notifications.php");
     exit;
@@ -59,7 +60,7 @@ $notifications = $stmt->fetchAll();
 <div class="main-content">
   <div class="page-header">
     <h1 class="page-title">Notifications Inbox</h1>
-    <a href="notifications.php?mark_all=1" class="btn-read-all">✓ Mark All as Read</a>
+    <form method="post"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="action" value="mark_all"><button class="btn-read-all" style="border:0;cursor:pointer">✓ Mark All as Read</button></form>
   </div>
 
   <div class="notif-list">

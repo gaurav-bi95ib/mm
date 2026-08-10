@@ -11,6 +11,107 @@ document.addEventListener('DOMContentLoaded', () => {
   const regionGrid      = document.getElementById('regionGrid');
   const nearMeBtn       = document.getElementById('nearMeBtn');
   const searchInput     = document.getElementById('searchInput');
+  const mapToggleBtn    = document.getElementById('mapToggleBtn');
+  const mapModal        = document.getElementById('mapModal');
+  const mapCloseBtn     = document.getElementById('mapCloseBtn');
+  const navToggleBtn    = document.getElementById('navToggleBtn');
+  const siteNav         = document.getElementById('siteNav');
+  const trackedPromotionImpressions = new Set();
+  let venueMap = null;
+  let venueMarkers = null;
+
+  // ─── RESPONSIVE NAVIGATION ──────────────────────
+  navToggleBtn?.addEventListener('click', () => {
+    const open = siteNav.classList.toggle('open');
+    navToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    navToggleBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    navToggleBtn.textContent = open ? '✕' : '☰';
+  });
+  siteNav?.addEventListener('click', event => {
+    if (event.target.closest('a') && siteNav.classList.contains('open')) navToggleBtn?.click();
+  });
+
+  // ─── CMS HERO CAROUSEL ──────────────────────────
+  const heroCarousel = document.getElementById('heroCarousel');
+  if (heroCarousel) {
+    const track = document.getElementById('heroTrack');
+    const slides = Array.from(heroCarousel.querySelectorAll('.hero-slide'));
+    const dots = Array.from(heroCarousel.querySelectorAll('.hero-dot'));
+    const prev = heroCarousel.querySelector('.hero-prev');
+    const next = heroCarousel.querySelector('.hero-next');
+    const status = document.getElementById('heroStatus');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let current = 0;
+    let timer = null;
+    let pointerStart = null;
+    let pointerDelta = 0;
+
+    const showSlide = (target, userInitiated = false) => {
+      if (slides.length < 2) return;
+      current = (target + slides.length) % slides.length;
+      track.style.transition = reduceMotion ? 'none' : '';
+      track.style.transform = `translate3d(-${current * 100}%,0,0)`;
+      slides.forEach((slide, index) => {
+        const active = index === current;
+        slide.classList.toggle('active', active);
+        slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+      });
+      dots.forEach((dot, index) => {
+        const active = index === current;
+        dot.classList.toggle('active', active);
+        dot.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      if (status && userInitiated) status.textContent = `Slide ${current + 1} of ${slides.length}`;
+      restartAutoplay();
+    };
+
+    const restartAutoplay = () => {
+      window.clearInterval(timer);
+      if (!reduceMotion && slides.length > 1 && !heroCarousel.matches(':hover') && !heroCarousel.contains(document.activeElement) && !document.hidden) {
+        timer = window.setInterval(() => showSlide(current + 1), 6500);
+      }
+    };
+
+    prev?.addEventListener('click', () => showSlide(current - 1, true));
+    next?.addEventListener('click', () => showSlide(current + 1, true));
+    dots.forEach(dot => dot.addEventListener('click', () => showSlide(Number(dot.dataset.slide), true)));
+    heroCarousel.addEventListener('keydown', event => {
+      if (event.key === 'ArrowLeft') { event.preventDefault(); showSlide(current - 1, true); }
+      if (event.key === 'ArrowRight') { event.preventDefault(); showSlide(current + 1, true); }
+    });
+    heroCarousel.addEventListener('mouseenter', () => window.clearInterval(timer));
+    heroCarousel.addEventListener('mouseleave', restartAutoplay);
+    heroCarousel.addEventListener('focusin', () => window.clearInterval(timer));
+    heroCarousel.addEventListener('focusout', event => { if (!heroCarousel.contains(event.relatedTarget)) restartAutoplay(); });
+    document.addEventListener('visibilitychange', restartAutoplay);
+
+    heroCarousel.addEventListener('pointerdown', event => {
+      if (event.target.closest('a,button') || slides.length < 2) return;
+      pointerStart = event.clientX;
+      pointerDelta = 0;
+      track.style.transition = 'none';
+      heroCarousel.setPointerCapture?.(event.pointerId);
+    });
+    heroCarousel.addEventListener('pointermove', event => {
+      if (pointerStart === null) return;
+      pointerDelta = event.clientX - pointerStart;
+      track.style.transform = `translate3d(calc(-${current * 100}% + ${pointerDelta}px),0,0)`;
+    });
+    const finishSwipe = () => {
+      if (pointerStart === null) return;
+      track.style.transition = '';
+      if (Math.abs(pointerDelta) > Math.min(90, heroCarousel.clientWidth * .14)) showSlide(current + (pointerDelta < 0 ? 1 : -1), true);
+      else showSlide(current);
+      pointerStart = null;
+      pointerDelta = 0;
+    };
+    heroCarousel.addEventListener('pointerup', finishSwipe);
+    heroCarousel.addEventListener('pointercancel', finishSwipe);
+    restartAutoplay();
+    heroCarousel.querySelectorAll('.hero-slide[data-event-promotion] .hero-primary-btn').forEach(link => {
+      link.addEventListener('click', () => trackPromotion('event_promotion', link.closest('.hero-slide').dataset.eventPromotion, 'click'));
+    });
+  }
 
   // ─── NEAR ME ────────────────────────────────────
   if (nearMeBtn) {
@@ -20,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         nearMeActive = false;
         userLat = null; userLng = null;
         nearMeBtn.classList.remove('active');
-        nearMeBtn.innerHTML = '📍 Near Me';
+        nearMeBtn.innerHTML = '📍 Near me';
         fetchGrounds();
         return;
       }
@@ -28,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
       nearMeBtn.disabled  = true;
       if (!navigator.geolocation) {
         alert('Geolocation is not supported by your browser.');
-        nearMeBtn.innerHTML = '📍 Near Me';
+        nearMeBtn.innerHTML = '📍 Near me';
         nearMeBtn.disabled  = false;
         return;
       }
@@ -37,13 +138,13 @@ document.addEventListener('DOMContentLoaded', () => {
           userLat = pos.coords.latitude;
           userLng = pos.coords.longitude;
           nearMeActive = true;
-          nearMeBtn.innerHTML = '📍 Near Me ✓';
+          nearMeBtn.innerHTML = '📍 Near me ✓';
           nearMeBtn.classList.add('active');
           nearMeBtn.disabled = false;
           fetchGrounds();
         },
         () => {
-          nearMeBtn.innerHTML = '📍 Near Me';
+          nearMeBtn.innerHTML = '📍 Near me';
           nearMeBtn.disabled  = false;
           alert('Could not get your location. Please allow location access and try again.');
         }
@@ -74,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.status === 'success') {
         allGrounds = data.grounds;
         renderGrounds(data.grounds);
+        renderMapMarkers(data.grounds);
       } else {
         if (groundsGrid) groundsGrid.innerHTML = `<p style="padding:20px;text-align:center;color:#ef4444;">Failed to load venues. Is MySQL running?</p>`;
       }
@@ -86,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ─── RENDER ─────────────────────────────────────
   function renderGrounds(grounds) {
     if (!groundsGrid) return;
-
     if (resultsCountText) {
       const regionLabel = currentRegion === 'all' ? 'Nepal' : currentRegion;
       const nearLabel   = nearMeActive ? ' · sorted by distance' : '';
@@ -105,41 +206,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
     groundsGrid.innerHTML = grounds.map(g => {
       const distanceBadge = g.distance_km !== null
-        ? `<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:3px 8px;border-radius:50px;">📍 ${g.distance_km} km</span>`
+        ? `<span class="distance-badge">${g.distance_km} km away</span>`
         : '';
       const sportEmoji = {Football:'⚽',Futsal:'🏟️',Cricket:'🏏',Cricsal:'🎯'}[g.sport_type] || '🏅';
-      const cover = g.cover_image || (g.images && g.images[0]) || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=600&q=80';
+      const fallbackCover = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=900&q=82';
+      const cover = g.cover_image || (g.images && g.images[0]) || fallbackCover;
+      const recommendationId = Number(g.is_recommended) === 1 && Number(g.recommended_promotion_id) > 0
+        ? Number(g.recommended_promotion_id)
+        : 0;
+      if (recommendationId && !trackedPromotionImpressions.has(String(recommendationId))) {
+        trackedPromotionImpressions.add(String(recommendationId));
+        trackPromotion('recommended_venue', recommendationId, 'impression');
+      }
+      const venueHref = `venue.php?slug=${encodeURIComponent(g.slug)}${recommendationId ? `&recommended=${recommendationId}` : ''}`;
+      const amenityIcons = {'Changing Room':'🚿','Parking':'🚗','CCTV':'📹','Floodlights':'💡','Drinking Water':'💧','First Aid':'✚','WiFi':'⌁','Cafeteria':'☕','Locker Room':'▣','AC Waiting Area':'❄','Canteen':'🍽','Coaching Available':'◉','Pavilion':'⌂','Indoor AC':'❄','Nets':'🥅','Sand Court':'◌'};
+      const amenityChips = (g.amenities || []).slice(0, 3).map(amenity =>
+        `<span class="ground-amenity"><i aria-hidden="true">${amenityIcons[amenity] || '✓'}</i>${escapeHtml(amenity)}</span>`
+      ).join('');
       return `
-      <div class="ground-card" onclick="window.location.href='venue.php?slug=${encodeURIComponent(g.slug)}'" style="cursor:pointer;">
+      <article class="ground-card" ${recommendationId ? `data-recommended-id="${recommendationId}"` : ''} onclick="window.location.href='${venueHref}'" tabindex="0" onkeydown="if(event.key==='Enter')this.click()">
         <div class="ground-img-wrap">
-          <img src="${cover}" alt="${escapeHtml(g.name)}" loading="lazy">
+          <img src="${escapeHtml(cover)}" alt="${escapeHtml(g.name)}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackCover}'">
           <span class="ground-badge">${escapeHtml(g.capacity||g.sport_type)}</span>
-          ${g.featured ? '<span style="position:absolute;top:10px;left:10px;background:#f9631c;color:#fff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:50px;">⭐ FEATURED</span>' : ''}
+          ${recommendationId ? '<span class="ground-recommended" title="Paid Recommended Venue placement">RECOMMENDED</span>' : ''}
         </div>
         <div class="ground-content">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <h3 class="ground-name">${escapeHtml(g.name)}</h3>
-            <span style="font-size:12px;font-weight:700;color:#f59e0b;">★ ${parseFloat(g.rating||0).toFixed(1)}</span>
-          </div>
+          <div class="ground-card-top"><span>${sportEmoji} ${escapeHtml(g.sport_type)}</span></div>
+          <h3 class="ground-name">${escapeHtml(g.name)}</h3>
           <div class="ground-location">📍 ${escapeHtml(g.address||g.city)}</div>
-          <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;align-items:center;">
-            <span style="background:#f1f5f9;color:#64748b;font-size:10px;font-weight:700;padding:3px 8px;border-radius:50px;">${sportEmoji} ${g.sport_type}</span>
-            ${distanceBadge}
+          <div class="ground-facilities">
+            <div class="ground-facilities-head"><span>Popular facilities</span>${distanceBadge}</div>
+            <div class="ground-amenities-list">${amenityChips || '<span class="ground-amenity muted"><i aria-hidden="true">✓</i>Details on venue page</span>'}</div>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-            <div style="font-size:13px;font-weight:800;color:#0f2740;">NPR ${Number(g.price_per_hour).toLocaleString()}<span style="font-size:10px;font-weight:500;color:#64748b;">/hr</span></div>
-            <button class="ground-book-btn" onclick="event.stopPropagation();window.location.href='venue.php?slug=${encodeURIComponent(g.slug)}'">
-              Book Now 📅
-            </button>
+          <div class="ground-card-footer">
+            <div class="ground-price"><small>From</small><strong>NPR ${Number(g.price_per_hour).toLocaleString()}</strong><span>/ hour</span></div>
+            <button class="ground-book-btn" onclick="event.stopPropagation();window.location.href='${venueHref}'">View slots <span>→</span></button>
           </div>
         </div>
-      </div>`;
+      </article>`;
     }).join('');
+    groundsGrid.querySelectorAll('[data-recommended-id]').forEach(card => {
+      card.addEventListener('click', () => trackPromotion('recommended_venue', card.dataset.recommendedId, 'click'), {capture:true});
+    });
+  }
+
+  function trackPromotion(promotionType, promotionId, eventType) {
+    if (!promotionId) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    fetch('api/track_promotion.php', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({promotion_type:promotionType,promotion_id:Number(promotionId),event_type:eventType,csrf_token:csrfToken}),keepalive:true}).catch(() => {});
   }
 
   function escapeHtml(str) {
-    return String(str||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+
+  // ─── LIVE VENUE MAP ─────────────────────────────
+  function renderMapMarkers(grounds) {
+    if (!venueMap || !window.L) return;
+    venueMarkers.clearLayers();
+    const bounds = [];
+    grounds.forEach(ground => {
+      const lat = Number(ground.lat), lng = Number(ground.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const marker = L.marker([lat, lng]).bindPopup(`<div class="map-popup"><strong>${escapeHtml(ground.name)}</strong><span>${escapeHtml(ground.sport_type)} · NPR ${Number(ground.price_per_hour).toLocaleString()}/hr</span><a href="venue.php?slug=${encodeURIComponent(ground.slug)}">View venue →</a></div>`);
+      marker.addTo(venueMarkers); bounds.push([lat,lng]);
+    });
+    if (bounds.length) venueMap.fitBounds(bounds, {padding:[35,35],maxZoom:13});
+  }
+  function toggleVenueMap(forceOpen) {
+    if (!mapModal || !window.L) return;
+    const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : mapModal.hidden;
+    mapModal.hidden = !shouldOpen;
+    mapToggleBtn?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    if (shouldOpen && !venueMap) {
+      venueMap = L.map('leafletMap',{scrollWheelZoom:false}).setView([27.7036,85.3199],11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(venueMap);
+      venueMarkers = L.layerGroup().addTo(venueMap);
+      renderMapMarkers(allGrounds);
+    }
+    if (shouldOpen) window.setTimeout(() => venueMap?.invalidateSize(), 80);
+  }
+  mapToggleBtn?.addEventListener('click', () => toggleVenueMap());
+  mapCloseBtn?.addEventListener('click', () => toggleVenueMap(false));
 
   // ─── FILTERS ────────────────────────────────────
   if (sportsGrid) {

@@ -5,7 +5,8 @@ requireSuperAdmin();
 
 $db = getDB();
 
-if (isset($_GET['mark_all'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_all') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) { http_response_code(403); die('Your session expired.'); }
     $db->prepare("UPDATE notifications SET is_read = 1 WHERE role = 'superadmin'")->execute();
     header("Location: notifications.php");
     exit;
@@ -49,7 +50,9 @@ $notifications = $stmt->fetchAll();
   <a href="index.php" class="nav-item">📊 Governance</a>
   <a href="applications.php" class="nav-item">📋 Applications</a>
   <a href="owners.php" class="nav-item">🏢 Tenants</a>
-  <a href="plans.php" class="nav-item">💳 SaaS Plans</a>
+  <a href="plans.php" class="nav-item">💳 Commercial Services</a>
+  <a href="recommended-promotions.php" class="nav-item">📍 Recommended Venue</a>
+  <a href="event-promotions.php" class="nav-item">📣 Event Campaigns</a>
   <a href="cms.php" class="nav-item">📝 CMS & Content</a>
   <a href="audit.php" class="nav-item">🛡️ Audit Logs</a>
   <a href="notifications.php" class="nav-item active">🔔 System Alerts</a>
@@ -59,7 +62,7 @@ $notifications = $stmt->fetchAll();
 <div class="main-content">
   <div class="page-header">
     <h1 class="page-title">Platform System Alerts</h1>
-    <a href="notifications.php?mark_all=1" class="btn-read-all">✓ Mark All as Read</a>
+    <form method="post"><input type="hidden" name="csrf_token" value="<?=csrfToken()?>"><input type="hidden" name="action" value="mark_all"><button class="btn-read-all" style="border:0;cursor:pointer">✓ Mark All as Read</button></form>
   </div>
 
   <div class="notif-list">
